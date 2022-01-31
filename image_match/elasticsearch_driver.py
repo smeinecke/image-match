@@ -7,17 +7,15 @@ from collections import deque
 
 class SignatureES(SignatureDatabaseBase):
     """Elasticsearch driver for image-match
-
     """
 
-    def __init__(self, es, index='images', doc_type='image', timeout='10s', size=100,
+    def __init__(self, es, index='images', timeout='10s', size=100,
                  *args, **kwargs):
         """Extra setup for Elasticsearch
 
         Args:
             es (elasticsearch): an instance of the elasticsearch python driver
             index (Optional[string]): a name for the Elasticsearch index (default 'images')
-            doc_type (Optional[string]): a name for the document time (default 'image')
             timeout (Optional[int]): how long to wait on an Elasticsearch query, in seconds (default 10)
             size (Optional[int]): maximum number of Elasticsearch results (default 100)
             *args (Optional): Variable length argument list to pass to base constructor
@@ -40,7 +38,6 @@ class SignatureES(SignatureDatabaseBase):
         """
         self.es = es
         self.index = index
-        self.doc_type = doc_type
         self.timeout = timeout
         self.size = size
 
@@ -53,12 +50,12 @@ class SignatureES(SignatureDatabaseBase):
             rec.pop('metadata')
 
         # build the 'should' list
-        should = [{'term': {'{}.{}'.format(self.doc_type, word): rec[word]}} for word in rec]
+        should = [{'term': { word: rec[word]}} for word in rec]
         body = {
             'query': {
                    'bool': {'should': should}
             },
-            '_source': {'excludes': ['{}.simple_word_*'.format(self.doc_type)]}
+            '_source': {'excludes': ['simple_word_*']}
         }
 
         if pre_filter is not None:
@@ -69,7 +66,7 @@ class SignatureES(SignatureDatabaseBase):
                               size=self.size,
                               timeout=self.timeout)['hits']['hits']
 
-        sigs = np.array([x['_source'][self.doc_type]['signature'] for x in res])
+        sigs = np.array([x['_source']['signature'] for x in res])
 
         if sigs.size == 0:
             return []
@@ -78,8 +75,8 @@ class SignatureES(SignatureDatabaseBase):
 
         formatted_res = [{'id': x['_id'],
                           'score': x['_score'],
-                          'metadata': x['_source'][self.doc_type].get('metadata'),
-                          'path': x['_source'][self.doc_type].get('url', x['_source'][self.doc_type].get('path'))}
+                          'metadata': x['_source'].get('metadata'),
+                          'path': x['_source'].get('url', x['_source'].get('path'))}
                          for x in res]
 
         for i, row in enumerate(formatted_res):
@@ -90,7 +87,7 @@ class SignatureES(SignatureDatabaseBase):
 
     def insert_single_record(self, rec, refresh_after=False):
         rec['timestamp'] = datetime.now()
-        self.es.index(index=self.index, body={ self.doc_type: rec }, refresh=refresh_after)
+        self.es.index(index=self.index, body=rec, refresh=refresh_after)
 
     def delete_duplicates(self, path):
         """Delete all but one entries in elasticsearch whose `path` value is equivalent to that of path.
@@ -100,11 +97,12 @@ class SignatureES(SignatureDatabaseBase):
         matching_paths = [item['_id'] for item in
                           self.es.search(body={'query':
                                                {'match':
-                                                {'{}.path'.format(self.doc_type): path}
+                                                {'path': path}
                                                }
                                               },
                                          index=self.index)['hits']['hits']
-                          if item['_source'][self.doc_type]['path'] == path]
-        if len(matching_paths) > 0:
+                          if item['_source']['path'] == path]
+
+        if matching_paths:
             for id_tag in matching_paths[1:]:
                 self.es.delete(index=self.index, id=id_tag)
