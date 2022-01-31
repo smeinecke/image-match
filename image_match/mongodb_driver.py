@@ -63,12 +63,12 @@ class SignatureMongo(SignatureDatabaseBase):
         # create a set of unique results, using MongoDB _id field
         unique_results = set()
 
-        l = list()
+        l = []
 
         while True:
 
             # build children processes, taking cursors from in_process queue first, then initial queue
-            p = list()
+            p = []
             while len(p) < n_parallel_words:
                 word_pair = initial_q.get()
                 if word_pair == 'STOP':
@@ -84,12 +84,11 @@ class SignatureMongo(SignatureDatabaseBase):
                                            self.distance_cutoff,
                                            maximum_matches)))
 
-            if len(p) > 0:
-                for process in p:
-                    process.start()
-            else:
+            if not p:
                 break
 
+            for process in p:
+                process.start()
             # collect results, taking care not to return the same result twice
 
             num_processes = len(p)
@@ -158,7 +157,7 @@ def get_next_match(result_q, word, collection, signature, cutoff=0.5, max_in_cur
         result_q.put('STOP')
         return
 
-    matches = dict()
+    matches = {}
     while True:
         try:
             rec = curs.next()
