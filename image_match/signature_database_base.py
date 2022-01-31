@@ -187,7 +187,7 @@ class SignatureDatabaseBase(object):
 
         self.gis = ImageSignature(n=n_grid, crop_percentiles=crop_percentile, *signature_args, **signature_kwargs)
 
-    def add_image(self, path, img=None, bytestream=False, metadata=None, refresh_after=False):
+    def add_image(self, path, img=None, bytestream=False, metadata=None, *args, **kwargs):
         """Add a single image to the database
 
         Args:
@@ -206,7 +206,7 @@ class SignatureDatabaseBase(object):
 
         """
         rec = make_record(path, self.gis, self.k, self.N, img=img, bytestream=bytestream, metadata=metadata)
-        self.insert_single_record(rec, refresh_after=refresh_after)
+        self.insert_single_record(rec, *args, **kwargs)
 
     def search_image(self, path, all_orientations=False, bytestream=False, pre_filter=None):
         """Search for matches
@@ -240,6 +240,8 @@ class SignatureDatabaseBase(object):
 
         """
         img = self.gis.preprocess_image(path, bytestream)
+        # default to no transformations
+        orientations = [None]
 
         if all_orientations:
             # initialize an iterator of composed transformations
@@ -248,7 +250,7 @@ class SignatureDatabaseBase(object):
             mirrors = [lambda x: x, np.fliplr]
 
             # an ugly solution for function composition
-            rotations = [lambda x: x,
+            rotations = [None,
                          np.rot90,
                          lambda x: np.rot90(x, 2),
                          lambda x: np.rot90(x, 3)]
@@ -256,24 +258,19 @@ class SignatureDatabaseBase(object):
             # cartesian product of all possible orientations
             orientations = product(inversions, rotations, mirrors)
 
-        else:
-            # otherwise just use the identity transformation
-            orientations = [lambda x: x]
-
         # try for every possible combination of transformations; if all_orientations=False,
         # this will only take one iteration
         result = []
 
         orientations = set(np.ravel(list(orientations)))
         for transform in orientations:
-            # compose all functions and apply on signature
-            transformed_img = transform(img)
+            # compose all functions (if not None) and apply on signature
+            transformed_img = img if transform is None else transform(img)
 
             # generate the signature
             transformed_record = make_record(transformed_img, self.gis, self.k, self.N)
 
-            l = self.search_single_record(transformed_record, pre_filter=pre_filter)
-            result.extend(l)
+            result.extend(self.search_single_record(transformed_record, pre_filter=pre_filter))
 
         ids = set()
         unique = []
@@ -282,8 +279,7 @@ class SignatureDatabaseBase(object):
                 unique.append(item)
                 ids.add(item['id'])
 
-        r = sorted(unique, key=itemgetter('dist'))
-        return r
+        return sorted(unique, key=itemgetter('dist'))
 
 
 def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
@@ -340,8 +336,8 @@ def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
          }
 
     """
-    record = dict()
-    record['path'] = path
+    record = {'path': path}
+
     if img is not None:
         signature = gis.generate_signature(img, bytestream=bytestream)
     else:
