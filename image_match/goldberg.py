@@ -4,7 +4,7 @@ from skimage.io import imread
 from PIL import Image
 from PIL.MpoImagePlugin import MpoImageFile
 
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 
 try:
     from cairosvg import svg2png
@@ -115,7 +115,9 @@ class ImageSignature(object):
 
         self.handle_mpo = True
 
-    def generate_signature(self, path_or_image, bytestream: bool = False):
+    def generate_signature(
+        self, path_or_image: Union[str, bytes, np.ndarray], bytestream: bool = False
+    ):
         """Generates an image signature.
 
         See section 3 of Goldberg, et al.
@@ -219,7 +221,9 @@ class ImageSignature(object):
 
     @staticmethod
     def preprocess_image(
-        image_or_path, bytestream: bool = False, handle_mpo: bool = False
+        image_or_path: Union[str, bytes, np.ndarray],
+        bytestream: bool = False,
+        handle_mpo: bool = False,
     ):
         """Loads an image and converts to greyscale.
 

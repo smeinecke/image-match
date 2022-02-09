@@ -91,11 +91,11 @@ class SignatureES(SignatureDatabaseBase):
 
         return [filter(lambda y: y["dist"] < self.distance_cutoff, formatted_res)]
 
-    async def insert_single_record(self, rec, refresh_after=False):
+    async def insert_single_record(self, rec: dict, refresh_after: bool = False):
         rec["timestamp"] = datetime.now()
         await self.es.index(index=self.index, body=rec, refresh=refresh_after)
 
-    async def delete_duplicates(self, path):
+    async def delete_duplicates(self, path: str):
         """Delete all but one entries in elasticsearch whose `path` value is equivalent to that of path.
         Args:
             path (string): path value to compare to those in the elastic search

@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union
 from image_match.goldberg import ImageSignature
 from itertools import product
 from operator import itemgetter
@@ -202,7 +202,7 @@ class SignatureDatabaseBase(object):
 
     async def add_image(
         self,
-        path: str,
+        path: Union[str, bytes, np.ndarray],
         img=None,
         bytestream: bool = False,
         metadata: dict = None,
@@ -239,7 +239,7 @@ class SignatureDatabaseBase(object):
 
     async def search_image(
         self,
-        path: str,
+        path: Union[str, bytes, np.ndarray],
         all_orientations: bool = False,
         bytestream: bool = False,
         pre_filter: dict = None,
@@ -324,7 +324,7 @@ class SignatureDatabaseBase(object):
 
 
 def make_record(
-    path: str,
+    path: Union[str, bytes, np.ndarray],
     gis: ImageSignature,
     k: int,
     N: int,
@@ -405,7 +405,7 @@ def make_record(
     return record
 
 
-def get_words(array, k, N):
+def get_words(array, k: int, N: int):
     """Gets N words of length k from an array.
 
     Words may overlap.
