@@ -444,9 +444,7 @@ def get_words(array, k: int, N: int):
         if pos + k <= array.shape[0]:
             words[i] = array[pos : pos + k]
         else:
-            temp = array[pos:].copy()
-            temp.resize(k)
-            words[i] = temp
+            words[i] = np.resize(array[pos:], k)
 
     return words
 

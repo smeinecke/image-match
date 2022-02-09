@@ -49,7 +49,7 @@ class SignatureES(SignatureDatabaseBase):
 
         super(SignatureES, self).__init__(*args, **kwargs)
 
-    async def search_single_record(self, rec: dict, pre_filter: dict = None) -> list:
+    async def search_single_record(self, rec: dict, pre_filter: dict = None) -> filter:
         path = rec.pop("path")
         signature = rec.pop("signature")
         if "metadata" in rec:
@@ -67,9 +67,8 @@ class SignatureES(SignatureDatabaseBase):
 
         res = await self.es.search(
             index=self.index, body=body, size=self.size, timeout=self.timeout
-        )["hits"]["hits"]
-
-        sigs = np.array([x["_source"]["signature"] for x in res])
+        )
+        sigs = np.array([x["_source"]["signature"] for x in res["hits"]["hits"]])
 
         if sigs.size == 0:
             return []
@@ -83,17 +82,17 @@ class SignatureES(SignatureDatabaseBase):
                 "metadata": x["_source"].get("metadata"),
                 "path": x["_source"].get("url", x["_source"].get("path")),
             }
-            for x in res
+            for x in res["hits"]["hits"]
         ]
 
         for i, row in enumerate(formatted_res):
             row["dist"] = dists[i]
 
-        return [filter(lambda y: y["dist"] < self.distance_cutoff, formatted_res)]
+        return filter(lambda y: y["dist"] < self.distance_cutoff, formatted_res)
 
     async def insert_single_record(self, rec: dict, refresh_after: bool = False):
         rec["timestamp"] = datetime.now()
-        await self.es.index(index=self.index, body=rec, refresh=refresh_after)
+        await self.es.index(index=self.index, document=rec, refresh=refresh_after)
 
     async def delete_duplicates(self, path: str):
         """Delete all but one entries in elasticsearch whose `path` value is equivalent to that of path.
@@ -101,11 +100,10 @@ class SignatureES(SignatureDatabaseBase):
             path (string): path value to compare to those in the elastic search
         """
         _body = {"query": {"match": {"path": path}}}
+        res = await self.es.search(body=_body, index=self.index)
         matching_paths = [
             item["_id"]
-            for item in await self.es.search(body=_body, index=self.index)["hits"][
-                "hits"
-            ]
+            for item in res["hits"]["hits"]
             if item["_source"]["path"] == path
         ]
 
@@ -113,4 +111,4 @@ class SignatureES(SignatureDatabaseBase):
             return
 
         for id_tag in matching_paths[1:]:
-            self.es.delete(index=self.index, id=id_tag)
+            await self.es.delete(index=self.index, id=id_tag)
