@@ -6,9 +6,8 @@ import numpy as np
 
 
 class SignatureMongo(SignatureDatabaseBase):
-    """MongoDB driver for image-match
+    """MongoDB driver for image-match"""
 
-    """
     def __init__(self, collection, *args, **kwargs):
         """Additional MongoDB setup
 
@@ -36,13 +35,23 @@ class SignatureMongo(SignatureDatabaseBase):
         self.collection = collection
         # Extract index fields, if any exist yet
         if self.collection.count() > 0:
-            self.index_names = [field for field in self.collection.find_one({}).keys()
-                                if field.find('simple') > -1]
+            self.index_names = [
+                field
+                for field in self.collection.find_one({}).keys()
+                if field.find("simple") > -1
+            ]
 
         super(SignatureMongo, self).__init__(*args, **kwargs)
 
-    def search_single_record(self, rec, n_parallel_words=1, word_limit=None,
-                             process_timeout=None, maximum_matches=1000, filter=None):
+    def search_single_record(
+        self,
+        rec,
+        n_parallel_words=1,
+        word_limit=None,
+        process_timeout=None,
+        maximum_matches=1000,
+        filter=None,
+    ):
         if n_parallel_words is None:
             n_parallel_words = cpu_count()
 
@@ -51,10 +60,13 @@ class SignatureMongo(SignatureDatabaseBase):
 
         initial_q = managerQueue.Queue()
 
-        [initial_q.put({field_name: rec[field_name]}) for field_name in self.index_names[:word_limit]]
+        [
+            initial_q.put({field_name: rec[field_name]})
+            for field_name in self.index_names[:word_limit]
+        ]
 
         # enqueue a sentinel value so we know we have reached the end of the queue
-        initial_q.put('STOP')
+        initial_q.put("STOP")
         queue_empty = False
 
         # create an empty queue for results
@@ -71,18 +83,24 @@ class SignatureMongo(SignatureDatabaseBase):
             p = []
             while len(p) < n_parallel_words:
                 word_pair = initial_q.get()
-                if word_pair == 'STOP':
+                if word_pair == "STOP":
                     # if we reach the sentinel value, set the flag and stop queuing processes
                     queue_empty = True
                     break
                 if not initial_q.empty():
-                    p.append(Process(target=get_next_match,
-                                     args=(results_q,
-                                           word_pair,
-                                           self.collection,
-                                           np.array(rec['signature']),
-                                           self.distance_cutoff,
-                                           maximum_matches)))
+                    p.append(
+                        Process(
+                            target=get_next_match,
+                            args=(
+                                results_q,
+                                word_pair,
+                                self.collection,
+                                np.array(rec["signature"]),
+                                self.distance_cutoff,
+                                maximum_matches,
+                            ),
+                        )
+                    )
 
             if not p:
                 break
@@ -95,7 +113,7 @@ class SignatureMongo(SignatureDatabaseBase):
 
             while num_processes:
                 results = results_q.get()
-                if results == 'STOP':
+                if results == "STOP":
                     num_processes -= 1
                 else:
                     for key in results.keys():
@@ -112,7 +130,6 @@ class SignatureMongo(SignatureDatabaseBase):
 
         return l
 
-
     def insert_single_record(self, rec):
         self.collection.insert(rec)
 
@@ -121,17 +138,20 @@ class SignatureMongo(SignatureDatabaseBase):
             self.index_collection()
 
     def index_collection(self):
-        """Index a collection on words.
-
-        """
+        """Index a collection on words."""
         # Index on words
-        self.index_names = [field for field in self.collection.find_one({}).keys()
-                            if field.find('simple') > -1]
+        self.index_names = [
+            field
+            for field in self.collection.find_one({}).keys()
+            if field.find("simple") > -1
+        ]
         for name in self.index_names:
             self.collection.create_index(name)
 
 
-def get_next_match(result_q, word, collection, signature, cutoff=0.5, max_in_cursor=100):
+def get_next_match(
+    result_q, word, collection, signature, cutoff=0.5, max_in_cursor=100
+):
     """Given a cursor, iterate through matches
 
     Scans a cursor for word matches below a distance threshold.
@@ -150,23 +170,29 @@ def get_next_match(result_q, word, collection, signature, cutoff=0.5, max_in_cur
             ignore this cursor; this column is not discriminatory (default 100)
 
     """
-    curs = collection.find(word, projection=['_id', 'signature', 'path', 'metadata'])
+    curs = collection.find(word, projection=["_id", "signature", "path", "metadata"])
 
     # if the cursor has many matches, then it's probably not a huge help. Get the next one.
     if curs.count() > max_in_cursor:
-        result_q.put('STOP')
+        result_q.put("STOP")
         return
 
     matches = {}
     while True:
         try:
             rec = curs.next()
-            dist = normalized_distance(np.reshape(signature, (1, signature.size)), np.array(rec['signature']))[0]
+            dist = normalized_distance(
+                np.reshape(signature, (1, signature.size)), np.array(rec["signature"])
+            )[0]
             if dist < cutoff:
-                matches[rec['_id']] = {'dist': dist, 'path': rec['path'], 'id': rec['_id'], 'metadata': rec['metadata']}
+                matches[rec["_id"]] = {
+                    "dist": dist,
+                    "path": rec["path"],
+                    "id": rec["_id"],
+                    "metadata": rec["metadata"],
+                }
                 result_q.put(matches)
         except StopIteration:
             # do nothing...the cursor is exhausted
             break
-    result_q.put('STOP')
-
+    result_q.put("STOP")

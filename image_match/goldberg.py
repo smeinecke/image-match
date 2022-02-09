@@ -3,6 +3,9 @@ from skimage.color import rgb2gray
 from skimage.io import imread
 from PIL import Image
 from PIL.MpoImagePlugin import MpoImageFile
+
+from typing import Optional, List, Tuple
+
 try:
     from cairosvg import svg2png
 except ImportError:
@@ -24,8 +27,16 @@ class ImageSignature(object):
     Based on the method of Goldberg, et al. Available at http://www.cs.cmu.edu/~hcwong/Pdfs/icip02.ps
     """
 
-    def __init__(self, n=9, crop_percentiles=(5, 95), P=None, diagonal_neighbors=True,
-                 identical_tolerance=2/255., n_levels=2, fix_ratio=False):
+    def __init__(
+        self,
+        n: int = 9,
+        crop_percentiles: Tuple[int, int] = (5, 95),
+        P: int = None,
+        diagonal_neighbors: bool = True,
+        identical_tolerance: float = 2 / 255.0,
+        n_levels: int = 2,
+        fix_ratio: bool = False,
+    ):
         """Initialize the signature generator.
 
         The default parameters match those given in Goldberg's paper.
@@ -49,17 +60,21 @@ class ImageSignature(object):
         """
 
         # check inputs
-        assert crop_percentiles is None or len(crop_percentiles) == 2,\
-            'crop_percentiles should be a two-value tuple, or None'
+        assert (
+            crop_percentiles is None or len(crop_percentiles) == 2
+        ), "crop_percentiles should be a two-value tuple, or None"
         if crop_percentiles is not None:
-            assert crop_percentiles[0] >= 0,\
-                'Lower crop_percentiles limit should be > 0 (%r given)'\
+            assert crop_percentiles[0] >= 0, (
+                "Lower crop_percentiles limit should be > 0 (%r given)"
                 % crop_percentiles[0]
-            assert crop_percentiles[1] <= 100,\
-                'Upper crop_percentiles limit should be < 100 (%r given)'\
+            )
+            assert crop_percentiles[1] <= 100, (
+                "Upper crop_percentiles limit should be < 100 (%r given)"
                 % crop_percentiles[1]
-            assert crop_percentiles[0] < crop_percentiles[1],\
-                'Upper crop_percentile limit should be greater than lower limit.'
+            )
+            assert (
+                crop_percentiles[0] < crop_percentiles[1]
+            ), "Upper crop_percentile limit should be greater than lower limit."
             self.lower_percentile = crop_percentiles[0]
             self.upper_percentile = crop_percentiles[1]
             self.crop_percentiles = crop_percentiles
@@ -68,36 +83,39 @@ class ImageSignature(object):
             self.lower_percentile = 0
             self.upper_percentile = 100
 
-        assert type(n) is int, 'n should be an integer > 1'
-        assert n > 1, 'n should be greater than 1 (%r given)' % n
+        assert type(n) is int, "n should be an integer > 1"
+        assert n > 1, "n should be greater than 1 (%r given)" % n
         self.n = n
 
-        assert type(P) is int or P is None, 'P should be an integer >= 1, or None'
+        assert type(P) is int or P is None, "P should be an integer >= 1, or None"
         if P is not None:
-            assert P >= 1, 'P should be greater than 0 (%r given)' % n
+            assert P >= 1, "P should be greater than 0 (%r given)" % n
         self.P = P
 
-        assert type(diagonal_neighbors) is bool, 'diagonal_neighbors should be boolean'
+        assert type(diagonal_neighbors) is bool, "diagonal_neighbors should be boolean"
         self.diagonal_neighbors = diagonal_neighbors
         self.sig_length = self.n ** 2 * (4 + self.diagonal_neighbors * 4)
 
-        assert type(fix_ratio) is bool, 'fix_ratio should be boolean'
+        assert type(fix_ratio) is bool, "fix_ratio should be boolean"
         self.fix_ratio = fix_ratio
 
-        assert type(identical_tolerance) is float or type(identical_tolerance) is int,\
-            'identical_tolerance should be a number between 1 and 0'
-        assert 0. <= identical_tolerance <= 1.,\
-            'identical_tolerance should be greater than zero and less than one (%r given)' % identical_tolerance
+        assert (
+            type(identical_tolerance) is float or type(identical_tolerance) is int
+        ), "identical_tolerance should be a number between 1 and 0"
+        assert 0.0 <= identical_tolerance <= 1.0, (
+            "identical_tolerance should be greater than zero and less than one (%r given)"
+            % identical_tolerance
+        )
         self.identical_tolerance = identical_tolerance
 
-        assert type(n_levels) is int, 'n_levels should be an integer'
+        assert type(n_levels) is int, "n_levels should be an integer"
         assert n_levels > 0
-        'n_levels should be > 0 (%r given)' % n_levels
+        "n_levels should be > 0 (%r given)" % n_levels
         self.n_levels = n_levels
 
         self.handle_mpo = True
 
-    def generate_signature(self, path_or_image, bytestream=False):
+    def generate_signature(self, path_or_image, bytestream: bool = False):
         """Generates an image signature.
 
         See section 3 of Goldberg, et al.
@@ -159,20 +177,25 @@ class ImageSignature(object):
         """
 
         # Step 1:    Load image as array of grey-levels
-        im_array = self.preprocess_image(path_or_image, handle_mpo=self.handle_mpo, bytestream=bytestream)
+        im_array = self.preprocess_image(
+            path_or_image, handle_mpo=self.handle_mpo, bytestream=bytestream
+        )
 
         # Step 2a:   Determine cropping boundaries
         if self.crop_percentiles is not None:
-            image_limits = self.crop_image(im_array,
-                                           lower_percentile=self.lower_percentile,
-                                           upper_percentile=self.upper_percentile,
-                                           fix_ratio=self.fix_ratio)
+            image_limits = self.crop_image(
+                im_array,
+                lower_percentile=self.lower_percentile,
+                upper_percentile=self.upper_percentile,
+                fix_ratio=self.fix_ratio,
+            )
         else:
             image_limits = None
 
         # Step 2b:   Generate grid centers
-        x_coords, y_coords = self.compute_grid_points(im_array,
-                                                      n=self.n, window=image_limits)
+        x_coords, y_coords = self.compute_grid_points(
+            im_array, n=self.n, window=image_limits
+        )
 
         # Step 3:    Compute grey level mean of each P x P
         #           square centered at each grid point
@@ -180,19 +203,24 @@ class ImageSignature(object):
 
         # Step 4a:   Compute array of differences for each
         #           grid point vis-a-vis each neighbor
-        diff_mat = self.compute_differentials(avg_grey,
-                                              diagonal_neighbors=self.diagonal_neighbors)
+        diff_mat = self.compute_differentials(
+            avg_grey, diagonal_neighbors=self.diagonal_neighbors
+        )
 
         # Step 4b: Bin differences to only 2n+1 values
-        self.normalize_and_threshold(diff_mat,
-                                     identical_tolerance=self.identical_tolerance,
-                                     n_levels=self.n_levels)
+        self.normalize_and_threshold(
+            diff_mat,
+            identical_tolerance=self.identical_tolerance,
+            n_levels=self.n_levels,
+        )
 
         # Step 5: Flatten array and return signature
-        return np.ravel(diff_mat).astype('int8')
+        return np.ravel(diff_mat).astype("int8")
 
     @staticmethod
-    def preprocess_image(image_or_path, bytestream=False, handle_mpo=False):
+    def preprocess_image(
+        image_or_path, bytestream: bool = False, handle_mpo: bool = False
+    ):
         """Loads an image and converts to greyscale.
 
         Corresponds to 'step 1' in Goldberg's paper
@@ -234,17 +262,16 @@ class ImageSignature(object):
                     img = Image.open(BytesIO(svg2png(image_or_path)))
                 except (NameError, xml.etree.ElementTree.ParseError):
                     raise CorruptImageError()
-            img = img.convert('RGB')
+            img = img.convert("RGB")
             return rgb2gray(np.asarray(img, dtype=np.uint8))
 
-        if type(image_or_path) in string_types or \
-             type(image_or_path) is text_type:
+        if type(image_or_path) in string_types or type(image_or_path) is text_type:
             return imread(image_or_path, as_gray=True)
 
         if type(image_or_path) is bytes:
             try:
                 img = Image.open(image_or_path)
-                arr = np.array(img.convert('RGB'))
+                arr = np.array(img.convert("RGB"))
             except IOError:
                 # try again due to PIL weirdness
                 return imread(image_or_path, as_gray=True)
@@ -262,10 +289,15 @@ class ImageSignature(object):
                 # image already converted to grayscale
                 return image_or_path
 
-        raise TypeError('Path or image required.')
+        raise TypeError("Path or image required.")
 
     @staticmethod
-    def crop_image(image, lower_percentile=5, upper_percentile=95, fix_ratio=False):
+    def crop_image(
+        image: np.ndarray,
+        lower_percentile: int = 5,
+        upper_percentile: int = 95,
+        fix_ratio: bool = False,
+    ):
         """Crops an image, removing featureless border regions.
 
         Corresponds to the first part of 'step 2' in Goldberg's paper
@@ -295,42 +327,52 @@ class ImageSignature(object):
         cw = np.cumsum(np.sum(np.abs(np.diff(image, axis=0)), axis=0))
 
         # compute percentiles
-        upper_column_limit = np.searchsorted(cw,
-                                             np.percentile(cw, upper_percentile),
-                                             side='left')
-        lower_column_limit = np.searchsorted(cw,
-                                             np.percentile(cw, lower_percentile),
-                                             side='right')
-        upper_row_limit = np.searchsorted(rw,
-                                          np.percentile(rw, upper_percentile),
-                                          side='left')
-        lower_row_limit = np.searchsorted(rw,
-                                          np.percentile(rw, lower_percentile),
-                                          side='right')
+        upper_column_limit = np.searchsorted(
+            cw, np.percentile(cw, upper_percentile), side="left"
+        )
+        lower_column_limit = np.searchsorted(
+            cw, np.percentile(cw, lower_percentile), side="right"
+        )
+        upper_row_limit = np.searchsorted(
+            rw, np.percentile(rw, upper_percentile), side="left"
+        )
+        lower_row_limit = np.searchsorted(
+            rw, np.percentile(rw, lower_percentile), side="right"
+        )
 
         # if image is nearly featureless, use default region
         if lower_row_limit > upper_row_limit:
-            lower_row_limit = int(lower_percentile/100.*image.shape[0])
-            upper_row_limit = int(upper_percentile/100.*image.shape[0])
+            lower_row_limit = int(lower_percentile / 100.0 * image.shape[0])
+            upper_row_limit = int(upper_percentile / 100.0 * image.shape[0])
         if lower_column_limit > upper_column_limit:
-            lower_column_limit = int(lower_percentile/100.*image.shape[1])
-            upper_column_limit = int(upper_percentile/100.*image.shape[1])
+            lower_column_limit = int(lower_percentile / 100.0 * image.shape[1])
+            upper_column_limit = int(upper_percentile / 100.0 * image.shape[1])
 
         # if fix_ratio, return both limits as the larger range
         if fix_ratio:
-            if (upper_row_limit - lower_row_limit) > (upper_column_limit - lower_column_limit):
-                return [(lower_row_limit, upper_row_limit),
-                        (lower_row_limit, upper_row_limit)]
+            if (upper_row_limit - lower_row_limit) > (
+                upper_column_limit - lower_column_limit
+            ):
+                return [
+                    (lower_row_limit, upper_row_limit),
+                    (lower_row_limit, upper_row_limit),
+                ]
             else:
-                return [(lower_column_limit, upper_column_limit),
-                        (lower_column_limit, upper_column_limit)]
+                return [
+                    (lower_column_limit, upper_column_limit),
+                    (lower_column_limit, upper_column_limit),
+                ]
 
         # otherwise, proceed as normal
-        return [(lower_row_limit, upper_row_limit),
-                (lower_column_limit, upper_column_limit)]
+        return [
+            (lower_row_limit, upper_row_limit),
+            (lower_column_limit, upper_column_limit),
+        ]
 
     @staticmethod
-    def compute_grid_points(image, n=9, window=None):
+    def compute_grid_points(
+        image: np.ndarray, n: int = 9, window: Optional[List[Tuple[int]]] = None
+    ):
         """Computes grid points for image analysis.
 
         Corresponds to the second part of 'step 2' in the paper
@@ -361,7 +403,7 @@ class ImageSignature(object):
         x_coords = np.linspace(window[0][0], window[0][1], n + 2, dtype=int)[1:-1]
         y_coords = np.linspace(window[1][0], window[1][1], n + 2, dtype=int)[1:-1]
 
-        return x_coords, y_coords      # return pairs
+        return x_coords, y_coords  # return pairs
 
     @staticmethod
     def compute_mean_level(image, x_coords, y_coords, P=None):
@@ -407,24 +449,25 @@ class ImageSignature(object):
         """
 
         if P is None:
-            P = max([2.0, int(0.5 + min(image.shape)/20.)])     # per the paper
+            P = max([2.0, int(0.5 + min(image.shape) / 20.0)])  # per the paper
 
         avg_grey = np.zeros((x_coords.shape[0], y_coords.shape[0]))
 
-        for i, x in enumerate(x_coords):        # not the fastest implementation
-            lower_x_lim = int(max([x - P/2, 0]))
+        for i, x in enumerate(x_coords):  # not the fastest implementation
+            lower_x_lim = int(max([x - P / 2, 0]))
             upper_x_lim = int(min([lower_x_lim + P, image.shape[0]]))
             for j, y in enumerate(y_coords):
-                lower_y_lim = int(max([y - P/2, 0]))
+                lower_y_lim = int(max([y - P / 2, 0]))
                 upper_y_lim = int(min([lower_y_lim + P, image.shape[1]]))
 
-                avg_grey[i, j] = np.mean(image[lower_x_lim:upper_x_lim,
-                                        lower_y_lim:upper_y_lim])  # no smoothing here as in the paper
+                avg_grey[i, j] = np.mean(
+                    image[lower_x_lim:upper_x_lim, lower_y_lim:upper_y_lim]
+                )  # no smoothing here as in the paper
 
         return avg_grey
 
     @staticmethod
-    def compute_differentials(grey_level_matrix,  diagonal_neighbors=True):
+    def compute_differentials(grey_level_matrix, diagonal_neighbors=True):
         """Computes differences in greylevels for neighboring grid points.
 
         First part of 'step 4' in the paper.
@@ -472,57 +515,78 @@ class ImageSignature(object):
                     ...
 
         """
-        right_neighbors = -np.concatenate((np.diff(grey_level_matrix),
-                                           np.zeros(grey_level_matrix.shape[0]).
-                                           reshape((grey_level_matrix.shape[0], 1))),
-                                          axis=1)
-        left_neighbors = -np.concatenate((right_neighbors[:, -1:],
-                                          right_neighbors[:, :-1]),
-                                         axis=1)
+        right_neighbors = -np.concatenate(
+            (
+                np.diff(grey_level_matrix),
+                np.zeros(grey_level_matrix.shape[0]).reshape(
+                    (grey_level_matrix.shape[0], 1)
+                ),
+            ),
+            axis=1,
+        )
+        left_neighbors = -np.concatenate(
+            (right_neighbors[:, -1:], right_neighbors[:, :-1]), axis=1
+        )
 
-        down_neighbors = -np.concatenate((np.diff(grey_level_matrix, axis=0),
-                                          np.zeros(grey_level_matrix.shape[1]).
-                                          reshape((1, grey_level_matrix.shape[1]))))
+        down_neighbors = -np.concatenate(
+            (
+                np.diff(grey_level_matrix, axis=0),
+                np.zeros(grey_level_matrix.shape[1]).reshape(
+                    (1, grey_level_matrix.shape[1])
+                ),
+            )
+        )
 
         up_neighbors = -np.concatenate((down_neighbors[-1:], down_neighbors[:-1]))
 
         if diagonal_neighbors:
             # this implementation will only work for a square (m x m) grid
-            diagonals = np.arange(-grey_level_matrix.shape[0] + 1,
-                                  grey_level_matrix.shape[0])
+            diagonals = np.arange(
+                -grey_level_matrix.shape[0] + 1, grey_level_matrix.shape[0]
+            )
 
             upper_left_neighbors = sum(
-                [np.diagflat(np.insert(np.diff(np.diag(grey_level_matrix, i)), 0, 0), i)
-                 for i in diagonals])
-            lower_right_neighbors = -np.pad(upper_left_neighbors[1:, 1:],
-                                            (0, 1), mode='constant')
+                np.diagflat(np.insert(np.diff(np.diag(grey_level_matrix, i)), 0, 0), i)
+                for i in diagonals
+            )
+            lower_right_neighbors = -np.pad(
+                upper_left_neighbors[1:, 1:], (0, 1), mode="constant"
+            )
 
             # flip for anti-diagonal differences
             flipped = np.fliplr(grey_level_matrix)
-            upper_right_neighbors = sum([np.diagflat(np.insert(
-                np.diff(np.diag(flipped, i)), 0, 0), i) for i in diagonals])
-            lower_left_neighbors = -np.pad(upper_right_neighbors[1:, 1:],
-                                           (0, 1), mode='constant')
+            upper_right_neighbors = sum(
+                np.diagflat(np.insert(np.diff(np.diag(flipped, i)), 0, 0), i)
+                for i in diagonals
+            )
 
-            return np.dstack(np.array([
-                upper_left_neighbors,
-                up_neighbors,
-                np.fliplr(upper_right_neighbors),
-                left_neighbors,
-                right_neighbors,
-                np.fliplr(lower_left_neighbors),
-                down_neighbors,
-                lower_right_neighbors]))
+            lower_left_neighbors = -np.pad(
+                upper_right_neighbors[1:, 1:], (0, 1), mode="constant"
+            )
 
-        return np.dstack(np.array([
-            up_neighbors,
-            left_neighbors,
-            right_neighbors,
-            down_neighbors]))
+            return np.dstack(
+                np.array(
+                    [
+                        upper_left_neighbors,
+                        up_neighbors,
+                        np.fliplr(upper_right_neighbors),
+                        left_neighbors,
+                        right_neighbors,
+                        np.fliplr(lower_left_neighbors),
+                        down_neighbors,
+                        lower_right_neighbors,
+                    ]
+                )
+            )
+
+        return np.dstack(
+            np.array([up_neighbors, left_neighbors, right_neighbors, down_neighbors])
+        )
 
     @staticmethod
-    def normalize_and_threshold(difference_array,
-                                identical_tolerance=2/255., n_levels=2):
+    def normalize_and_threshold(
+        difference_array, identical_tolerance=2 / 255.0, n_levels=2
+    ):
         """Normalizes difference matrix in place.
 
         'Step 4' of the paper.  The flattened version of this array is the image signature.
@@ -563,27 +627,33 @@ class ImageSignature(object):
 
         # set very close values as equivalent
         mask = np.abs(difference_array) < identical_tolerance
-        difference_array[mask] = 0.
+        difference_array[mask] = 0.0
 
         # if image is essentially featureless, exit here
         if np.all(mask):
             return None
 
         # bin so that size of bins on each side of zero are equivalent
-        positive_cutoffs = np.percentile(difference_array[difference_array > 0.],
-                                         np.linspace(0, 100, n_levels+1))
-        negative_cutoffs = np.percentile(difference_array[difference_array < 0.],
-                                         np.linspace(100, 0, n_levels+1))
+        positive_cutoffs = np.percentile(
+            difference_array[difference_array > 0.0], np.linspace(0, 100, n_levels + 1)
+        )
+        negative_cutoffs = np.percentile(
+            difference_array[difference_array < 0.0], np.linspace(100, 0, n_levels + 1)
+        )
 
-        for level, interval in enumerate([positive_cutoffs[i:i+2]
-                                          for i in range(positive_cutoffs.shape[0] - 1)]):
-            difference_array[(difference_array >= interval[0]) &
-                             (difference_array <= interval[1])] = level + 1
+        for level, interval in enumerate(
+            [positive_cutoffs[i : i + 2] for i in range(positive_cutoffs.shape[0] - 1)]
+        ):
+            difference_array[
+                (difference_array >= interval[0]) & (difference_array <= interval[1])
+            ] = (level + 1)
 
-        for level, interval in enumerate([negative_cutoffs[i:i+2]
-                                          for i in range(negative_cutoffs.shape[0] - 1)]):
-            difference_array[(difference_array <= interval[0]) &
-                             (difference_array >= interval[1])] = -(level + 1)
+        for level, interval in enumerate(
+            [negative_cutoffs[i : i + 2] for i in range(negative_cutoffs.shape[0] - 1)]
+        ):
+            difference_array[
+                (difference_array <= interval[0]) & (difference_array >= interval[1])
+            ] = -(level + 1)
 
         return None
 

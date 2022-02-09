@@ -1,3 +1,4 @@
+from typing import Tuple
 from image_match.goldberg import ImageSignature
 from itertools import product
 from operator import itemgetter
@@ -13,7 +14,7 @@ class SignatureDatabaseBase(object):
 
     """
 
-    def search_single_record(self, rec, pre_filter=None):
+    async def search_single_record(self, rec: dict, pre_filter: dict = None):
         """Search for a matching image record.
 
         Must be implemented by derived class.
@@ -78,7 +79,7 @@ class SignatureDatabaseBase(object):
         """
         raise NotImplementedError
 
-    def insert_single_record(self, rec):
+    async def insert_single_record(self, rec: dict):
         """Insert an image record.
 
         Must be implemented by derived class.
@@ -116,9 +117,16 @@ class SignatureDatabaseBase(object):
         """
         raise NotImplementedError
 
-    def __init__(self, k=16, N=63, n_grid=9,
-                 crop_percentile=(5, 95), distance_cutoff=0.45,
-                 *signature_args, **signature_kwargs):
+    def __init__(
+        self,
+        k: int = 16,
+        N: int = 63,
+        n_grid: int = 9,
+        crop_percentile: Tuple[int, int] = (5, 95),
+        distance_cutoff: float = 0.45,
+        *signature_args,
+        **signature_kwargs
+    ):
         """Set up storage scheme for images
 
         Central to the speed of this approach is the transforming the image
@@ -165,11 +173,11 @@ class SignatureDatabaseBase(object):
         """
         # Check integer inputs
         if type(k) is not int:
-            raise TypeError('k should be an integer')
+            raise TypeError("k should be an integer")
         if type(N) is not int:
-            raise TypeError('N should be an integer')
+            raise TypeError("N should be an integer")
         if type(n_grid) is not int:
-            raise TypeError('n_grid should be an integer')
+            raise TypeError("n_grid should be an integer")
 
         self.k = k
         self.N = N
@@ -177,17 +185,30 @@ class SignatureDatabaseBase(object):
 
         # Check float input
         if type(distance_cutoff) is not float:
-            raise TypeError('distance_cutoff should be a float')
-        if distance_cutoff < 0.:
-            raise ValueError('distance_cutoff should be > 0 (got %r)' % distance_cutoff)
+            raise TypeError("distance_cutoff should be a float")
+        if distance_cutoff < 0.0:
+            raise ValueError("distance_cutoff should be > 0 (got %r)" % distance_cutoff)
 
         self.distance_cutoff = distance_cutoff
 
         self.crop_percentile = crop_percentile
 
-        self.gis = ImageSignature(n=n_grid, crop_percentiles=crop_percentile, *signature_args, **signature_kwargs)
+        self.gis = ImageSignature(
+            n=n_grid,
+            crop_percentiles=crop_percentile,
+            *signature_args,
+            **signature_kwargs
+        )
 
-    def add_image(self, path, img=None, bytestream=False, metadata=None, *args, **kwargs):
+    async def add_image(
+        self,
+        path: str,
+        img=None,
+        bytestream: bool = False,
+        metadata: dict = None,
+        *args,
+        **kwargs
+    ):
         """Add a single image to the database
 
         Args:
@@ -205,10 +226,24 @@ class SignatureDatabaseBase(object):
             metadata (Optional): any other information you want to include, can be nested (default None)
 
         """
-        rec = make_record(path, self.gis, self.k, self.N, img=img, bytestream=bytestream, metadata=metadata)
-        self.insert_single_record(rec, *args, **kwargs)
+        rec = make_record(
+            path,
+            self.gis,
+            self.k,
+            self.N,
+            img=img,
+            bytestream=bytestream,
+            metadata=metadata,
+        )
+        await self.insert_single_record(rec, *args, **kwargs)
 
-    def search_image(self, path, all_orientations=False, bytestream=False, pre_filter=None):
+    async def search_image(
+        self,
+        path: str,
+        all_orientations: bool = False,
+        bytestream: bool = False,
+        pre_filter: dict = None,
+    ):
         """Search for matches
 
         Args:
@@ -250,10 +285,12 @@ class SignatureDatabaseBase(object):
             mirrors = [lambda x: x, np.fliplr]
 
             # an ugly solution for function composition
-            rotations = [None,
-                         np.rot90,
-                         lambda x: np.rot90(x, 2),
-                         lambda x: np.rot90(x, 3)]
+            rotations = [
+                None,
+                np.rot90,
+                lambda x: np.rot90(x, 2),
+                lambda x: np.rot90(x, 3),
+            ]
 
             # cartesian product of all possible orientations
             orientations = product(inversions, rotations, mirrors)
@@ -270,19 +307,31 @@ class SignatureDatabaseBase(object):
             # generate the signature
             transformed_record = make_record(transformed_img, self.gis, self.k, self.N)
 
-            result.extend(self.search_single_record(transformed_record, pre_filter=pre_filter))
+            result.extend(
+                await self.search_single_record(
+                    transformed_record, pre_filter=pre_filter
+                )
+            )
 
         ids = set()
         unique = []
         for item in result:
-            if item['id'] not in ids:
+            if item["id"] not in ids:
                 unique.append(item)
-                ids.add(item['id'])
+                ids.add(item["id"])
 
-        return sorted(unique, key=itemgetter('dist'))
+        return sorted(unique, key=itemgetter("dist"))
 
 
-def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
+def make_record(
+    path: str,
+    gis: ImageSignature,
+    k: int,
+    N: int,
+    img=None,
+    bytestream: bool = False,
+    metadata: dict = None,
+) -> dict:
     """Makes a record suitable for database insertion.
 
     Note:
@@ -336,17 +385,14 @@ def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
          }
 
     """
-    record = {'path': path}
-
     if img is not None:
         signature = gis.generate_signature(img, bytestream=bytestream)
     else:
         signature = gis.generate_signature(path)
 
-    record['signature'] = signature.tolist()
-
+    record = {"path": path, "signature": signature.tolist()}
     if metadata:
-        record['metadata'] = metadata
+        record["metadata"] = metadata
 
     words = get_words(signature, k, N)
     max_contrast(words)
@@ -354,7 +400,7 @@ def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
     words = words_to_int(words)
 
     for i in range(N):
-        record[''.join(['simple_word_', str(i)])] = words[i].tolist()
+        record["".join(["simple_word_", str(i)])] = words[i].tolist()
 
     return record
 
@@ -383,21 +429,20 @@ def get_words(array, k, N):
 
     """
     # generate starting positions of each word
-    word_positions = np.linspace(0, array.shape[0],
-                                 N, endpoint=False).astype('int')
+    word_positions = np.linspace(0, array.shape[0], N, endpoint=False).astype("int")
 
     # check that inputs make sense
     if k > array.shape[0]:
-        raise ValueError('Word length cannot be longer than array length')
+        raise ValueError("Word length cannot be longer than array length")
     if word_positions.shape[0] > array.shape[0]:
-        raise ValueError('Number of words cannot be more than array length')
+        raise ValueError("Number of words cannot be more than array length")
 
     # create empty words array
-    words = np.zeros((N, k)).astype('int8')
+    words = np.zeros((N, k)).astype("int8")
 
     for i, pos in enumerate(word_positions):
         if pos + k <= array.shape[0]:
-            words[i] = array[pos:pos+k]
+            words[i] = array[pos : pos + k]
         else:
             temp = array[pos:].copy()
             temp.resize(k)
@@ -429,7 +474,7 @@ def words_to_int(word_array):
     width = word_array.shape[1]
 
     # Three states (-1, 0, 1)
-    coding_vector = 3**np.arange(width)
+    coding_vector = 3 ** np.arange(width)
 
     # The 'plus one' here makes all digits positive, so that the
     # integer representation is strictly non-negative and unique

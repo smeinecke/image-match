@@ -1,16 +1,22 @@
 from .signature_database_base import SignatureDatabaseBase
 from .signature_database_base import normalized_distance
 from datetime import datetime
+from elasticsearch import AsyncElasticsearch
 import numpy as np
-from collections import deque
 
 
 class SignatureES(SignatureDatabaseBase):
-    """Elasticsearch driver for image-match
-    """
+    """Elasticsearch driver for image-match"""
 
-    def __init__(self, es, index='images', timeout='10s', size=100,
-                 *args, **kwargs):
+    def __init__(
+        self,
+        es: AsyncElasticsearch,
+        index: str = "images",
+        timeout: str = "10s",
+        size: int = 100,
+        *args,
+        **kwargs
+    ):
         """Extra setup for Elasticsearch
 
         Args:
@@ -43,66 +49,68 @@ class SignatureES(SignatureDatabaseBase):
 
         super(SignatureES, self).__init__(*args, **kwargs)
 
-    def search_single_record(self, rec, pre_filter=None):
-        path = rec.pop('path')
-        signature = rec.pop('signature')
-        if 'metadata' in rec:
-            rec.pop('metadata')
+    async def search_single_record(self, rec: dict, pre_filter: dict = None) -> list:
+        path = rec.pop("path")
+        signature = rec.pop("signature")
+        if "metadata" in rec:
+            rec.pop("metadata")
 
         # build the 'should' list
-        should = [{'term': { word: rec[word]}} for word in rec]
+        should = [{"term": {word: rec[word]}} for word in rec]
         body = {
-            'query': {
-                   'bool': {'should': should}
-            },
-            '_source': {'excludes': ['simple_word_*']}
+            "query": {"bool": {"should": should}},
+            "_source": {"excludes": ["simple_word_*"]},
         }
 
         if pre_filter is not None:
-            body['query']['bool']['filter'] = pre_filter
+            body["query"]["bool"]["filter"] = pre_filter
 
-        res = self.es.search(index=self.index,
-                              body=body,
-                              size=self.size,
-                              timeout=self.timeout)['hits']['hits']
+        res = await self.es.search(
+            index=self.index, body=body, size=self.size, timeout=self.timeout
+        )["hits"]["hits"]
 
-        sigs = np.array([x['_source']['signature'] for x in res])
+        sigs = np.array([x["_source"]["signature"] for x in res])
 
         if sigs.size == 0:
             return []
 
         dists = normalized_distance(sigs, np.array(signature))
 
-        formatted_res = [{'id': x['_id'],
-                          'score': x['_score'],
-                          'metadata': x['_source'].get('metadata'),
-                          'path': x['_source'].get('url', x['_source'].get('path'))}
-                         for x in res]
+        formatted_res = [
+            {
+                "id": x["_id"],
+                "score": x["_score"],
+                "metadata": x["_source"].get("metadata"),
+                "path": x["_source"].get("url", x["_source"].get("path")),
+            }
+            for x in res
+        ]
 
         for i, row in enumerate(formatted_res):
-            row['dist'] = dists[i]
-        formatted_res = filter(lambda y: y['dist'] < self.distance_cutoff, formatted_res)
+            row["dist"] = dists[i]
 
-        return formatted_res
+        return [filter(lambda y: y["dist"] < self.distance_cutoff, formatted_res)]
 
-    def insert_single_record(self, rec, refresh_after=False):
-        rec['timestamp'] = datetime.now()
-        self.es.index(index=self.index, body=rec, refresh=refresh_after)
+    async def insert_single_record(self, rec, refresh_after=False):
+        rec["timestamp"] = datetime.now()
+        await self.es.index(index=self.index, body=rec, refresh=refresh_after)
 
-    def delete_duplicates(self, path):
+    async def delete_duplicates(self, path):
         """Delete all but one entries in elasticsearch whose `path` value is equivalent to that of path.
         Args:
             path (string): path value to compare to those in the elastic search
         """
-        matching_paths = [item['_id'] for item in
-                          self.es.search(body={'query':
-                                               {'match':
-                                                {'path': path}
-                                               }
-                                              },
-                                         index=self.index)['hits']['hits']
-                          if item['_source']['path'] == path]
+        _body = {"query": {"match": {"path": path}}}
+        matching_paths = [
+            item["_id"]
+            for item in await self.es.search(body=_body, index=self.index)["hits"][
+                "hits"
+            ]
+            if item["_source"]["path"] == path
+        ]
 
-        if matching_paths:
-            for id_tag in matching_paths[1:]:
-                self.es.delete(index=self.index, id=id_tag)
+        if not matching_paths:
+            return
+
+        for id_tag in matching_paths[1:]:
+            self.es.delete(index=self.index, id=id_tag)
