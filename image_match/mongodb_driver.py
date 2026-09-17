@@ -65,6 +65,8 @@ class SignatureMongo(SignatureDatabaseBase):
         """
         if n_parallel_words is None:
             n_parallel_words = cpu_count()
+        if n_parallel_words < 1:
+            raise ValueError("n_parallel_words must be at least 1")
 
         if word_limit is None:
             word_limit = self.N

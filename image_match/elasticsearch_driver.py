@@ -53,7 +53,7 @@ class SignatureES(SignatureDatabaseBase):
             a list of dicts representing matches, filtered by distance_cutoff
 
         """
-        rec.pop("path")
+        rec.pop("path", None)
         signature = rec.pop("signature")
         if "metadata" in rec:
             rec.pop("metadata")

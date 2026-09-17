@@ -1,5 +1,4 @@
 import os
-import xml.etree.ElementTree  # nosec B405 -- only ParseError is referenced, no XML is parsed here
 from io import BytesIO
 
 import numpy as np
@@ -216,10 +215,12 @@ class ImageSignature(object):
                     raise CorruptImageError()
                 try:
                     png = svg2png(bytestring=image_or_path)
-                    if png is None:
-                        raise CorruptImageError()
-                    img = Image.open(BytesIO(png))
-                except xml.etree.ElementTree.ParseError:
+                    img = Image.open(BytesIO(png)) if png else None
+                except Exception:
+                    # cairosvg raises defusedxml exceptions, ParseError,
+                    # ValueError, etc. -- any failure means undecodable input
+                    img = None
+                if img is None:
                     raise CorruptImageError()
             img = img.convert("RGB")
             return rgb2gray(np.asarray(img, dtype=np.uint8))
