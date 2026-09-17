@@ -1,6 +1,6 @@
 # Makefile
 
-.PHONY: all format check validate test test-cov test-integration test-all db-up db-down test-integration-local vulture complexity xenon bandit pyright fix reformat-ruff fix-ruff
+.PHONY: all format check validate test test-cov test-integration test-all db-up db-down test-integration-local vulture complexity xenon bandit pyright docs fix reformat-ruff fix-ruff
 
 # Default target: runs format and check
 all: validate test
@@ -67,6 +67,9 @@ bandit:
 
 pyright:
 	uv run pyright
+
+docs:
+	uv run --extra docs sphinx-build -W -b html docs/source docs/build
 
 # Validate the code (format + check)
 validate: format check complexity bandit pyright vulture

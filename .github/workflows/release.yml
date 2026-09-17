@@ -12,18 +12,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      attestations: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install uv
-        run: wget -qO- https://astral.sh/uv/install.sh | sh
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
 
       - name: Build package
         run: uv build
 
       - name: List dist files
         run: ls -lh dist/
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: dist/*
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v7

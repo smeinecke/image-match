@@ -11,8 +11,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Unit Tests & Validation
+  validate:
+    name: Validation
     runs-on: ubuntu-latest
 
     steps:
@@ -24,14 +24,15 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/uv
-          key: uv-cache-${{ hashFiles('**/pyproject.toml') }}
+          key: uv-cache-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
           restore-keys: |
             uv-cache-
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
       - name: Set up Python environment
-        run: |
-          wget -qO- https://astral.sh/uv/install.sh | sh
-          uv sync --all-extras
+        run: uv sync --all-extras
 
       - name: Build wheel
         run: uv build
@@ -60,11 +61,34 @@ jobs:
         run: |
           uv run make pyright
 
+      - name: Build documentation
+        run: |
+          uv run make docs
+
+  test:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python environment
+        run: uv sync --all-extras --python ${{ matrix.python-version }}
+
       - name: Run pytest (Unit Tests)
         run: |
           uv run pytest tests -v -m "not integration" --cov=image_match --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage report
+        if: matrix.python-version == '3.13'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
@@ -73,7 +97,7 @@ jobs:
   integration:
     name: Integration Tests (Elasticsearch, OpenSearch & MongoDB)
     runs-on: ubuntu-latest
-    needs: test
+    needs: [validate, test]
     timeout-minutes: 15
 
     steps:
@@ -96,18 +120,19 @@ jobs:
           timeout 180 bash -c 'until curl -sf http://localhost:9201/_cluster/health >/dev/null; do sleep 2; done'
           echo "OpenSearch is ready!"
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
       - name: Cache dependencies
         uses: actions/cache@v6
         with:
           path: ~/.cache/uv
-          key: uv-cache-${{ hashFiles('**/pyproject.toml') }}
+          key: uv-cache-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
           restore-keys: |
             uv-cache-
 
       - name: Set up Python environment
-        run: |
-          wget -qO- https://astral.sh/uv/install.sh | sh
-          uv sync --all-extras
+        run: uv sync --all-extras
 
       - name: Run Integration Tests
         run: |
