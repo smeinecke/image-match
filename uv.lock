@@ -1034,7 +1034,6 @@ dependencies = [
     { name = "scikit-image", version = "0.24.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "scikit-image", version = "0.25.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
     { name = "scikit-image", version = "0.26.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "six" },
 ]
 
 [package.optional-dependencies]
@@ -1094,7 +1093,6 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'test'" },
     { name = "pytest-xdist", marker = "extra == 'test'" },
     { name = "scikit-image", specifier = ">=0.22" },
-    { name = "six", specifier = ">=1.16.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.2,<8.0" },
     { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = ">=2.0" },
 ]

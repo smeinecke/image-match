@@ -1,5 +1,9 @@
+import os
+import xml.etree.ElementTree  # nosec B405 -- only ParseError is referenced, no XML is parsed here
+from io import BytesIO
+
+import numpy as np
 from PIL import Image
-from PIL.MpoImagePlugin import MpoImageFile
 from skimage.color import rgb2gray
 from skimage.io import imread
 
@@ -7,11 +11,6 @@ try:
     from cairosvg import svg2png
 except ImportError:
     svg2png = None
-import xml.etree.ElementTree  # nosec B405 -- only ParseError is referenced, no XML is parsed here
-from io import BytesIO
-
-import numpy as np
-from six import string_types, text_type
 
 
 class CorruptImageError(RuntimeError):
@@ -225,7 +224,7 @@ class ImageSignature(object):
             img = img.convert("RGB")
             return rgb2gray(np.asarray(img, dtype=np.uint8))
 
-        if type(image_or_path) in string_types or type(image_or_path) is text_type:
+        if isinstance(image_or_path, (str, os.PathLike)):
             return imread(image_or_path, as_gray=True)
 
         if type(image_or_path) is bytes:
@@ -235,11 +234,6 @@ class ImageSignature(object):
             except IOError:
                 # try again due to PIL weirdness
                 return imread(image_or_path, as_gray=True)
-            if not handle_mpo:
-                return rgb2gray(arr)
-            # take the first images from the MPO
-            if arr.shape == (2,) and isinstance(arr[1].tolist(), MpoImageFile):
-                return rgb2gray(arr[0])
             return rgb2gray(arr)
 
         if type(image_or_path) is np.ndarray:

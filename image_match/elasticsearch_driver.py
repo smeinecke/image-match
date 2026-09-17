@@ -81,9 +81,7 @@ class SignatureES(SignatureDatabaseBase):
 
         for i, row in enumerate(formatted_res):
             row["dist"] = dists[i]
-        formatted_res = filter(lambda y: y["dist"] < self.distance_cutoff, formatted_res)
-
-        return formatted_res
+        return [y for y in formatted_res if y["dist"] < self.distance_cutoff]
 
     def insert_single_record(self, rec, refresh_after=False):
         """Insert an image record.

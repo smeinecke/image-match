@@ -69,6 +69,13 @@ class SignatureMongo(SignatureDatabaseBase):
         if word_limit is None:
             word_limit = self.N
 
+        # index_names may be empty if the collection was populated after
+        # this instance was created; try to pick the fields up lazily
+        if not self.index_names:
+            doc = self.collection.find_one({})
+            if doc:
+                self.index_names = [field for field in doc.keys() if field.find("simple") > -1]
+
         initial_q = Queue()
 
         for field_name in self.index_names[:word_limit]:
@@ -127,7 +134,9 @@ class SignatureMongo(SignatureDatabaseBase):
                             match_list.append(results[key])
 
             for thread in p:
-                thread.join()
+                # bound the wait so a timed-out search doesn't block on stragglers;
+                # workers are daemon threads and their late results are discarded
+                thread.join(timeout=process_timeout)
 
             # yield a set of results
             if queue_empty:
@@ -177,26 +186,25 @@ def get_next_match(result_q, word, collection, signature, cutoff=0.5, max_in_cur
             find query (default None)
 
     """
-    query = dict(word)
-    if pre_filter:
-        query.update(pre_filter)
+    try:
+        query = dict(word)
+        if pre_filter:
+            query.update(pre_filter)
 
-    # if the query has many matches, then it's probably not a huge help. Get the next one.
-    if collection.count_documents(query) > max_in_cursor:
+        # if the query has many matches, then it's probably not a huge help. Get the next one.
+        if collection.count_documents(query) <= max_in_cursor:
+            curs = collection.find(query, projection=["_id", "signature", "path", "metadata"])
+            while True:
+                try:
+                    rec = next(curs)
+                except StopIteration:
+                    # do nothing...the cursor is exhausted
+                    break
+                dist = normalized_distance(np.reshape(signature, (1, signature.size)), np.array(rec["signature"]))[0]
+                if dist < cutoff:
+                    # put a fresh dict per match; sharing a growing dict across
+                    # the queue races with the consumer iterating it
+                    result_q.put({rec["_id"]: {"dist": dist, "path": rec["path"], "id": rec["_id"], "metadata": rec.get("metadata")}})
+    finally:
+        # always signal completion, even on error, so the consumer doesn't hang
         result_q.put("STOP")
-        return
-
-    curs = collection.find(query, projection=["_id", "signature", "path", "metadata"])
-
-    matches = {}
-    while True:
-        try:
-            rec = next(curs)
-            dist = normalized_distance(np.reshape(signature, (1, signature.size)), np.array(rec["signature"]))[0]
-            if dist < cutoff:
-                matches[rec["_id"]] = {"dist": dist, "path": rec["path"], "id": rec["_id"], "metadata": rec.get("metadata")}
-                result_q.put(matches)
-        except StopIteration:
-            # do nothing...the cursor is exhausted
-            break
-    result_q.put("STOP")

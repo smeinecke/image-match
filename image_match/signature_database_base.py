@@ -475,7 +475,8 @@ def normalized_distance(_target_array, _vec, nan_value=1.0):
     topvec = np.linalg.norm(vec - target_array, axis=1)
     norm1 = np.linalg.norm(vec, axis=0)
     norm2 = np.linalg.norm(target_array, axis=1)
-    finvec = topvec / (norm1 + norm2)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        finvec = topvec / (norm1 + norm2)
     finvec[np.isnan(finvec)] = nan_value
 
     return finvec
