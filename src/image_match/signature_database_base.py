@@ -323,8 +323,8 @@ class SignatureDatabaseBase:
                     if f is not None:
                         transformed_img = f(transformed_img)
 
-            # generate the signature
-            records.append(make_record(transformed_img, self.gis, self.k, self.N))
+            # generate the signature; keep the original path on the record
+            records.append(make_record(path, self.gis, self.k, self.N, img=transformed_img))
 
         return records
 

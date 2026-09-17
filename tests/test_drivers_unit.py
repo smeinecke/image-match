@@ -267,11 +267,23 @@ def test_orientation_records_inversions(monkeypatch):
 
     d = _StubDriver()
     seen = []
-    monkeypatch.setattr(base_mod, "make_record", lambda img, gis, k, N: seen.append(img) or {"signature": img})
+    monkeypatch.setattr(base_mod, "make_record", lambda path, gis, k, N, img=None, **kw: seen.append(img) or {"signature": img})
     records = d._orientation_records("test.jpg", all_orientations=True)
     assert len(records) == 16
     base = seen[0]  # first transform is the identity composition
     assert any(np.array_equal(img, -base) for img in seen[1:])
+
+
+def test_orientation_records_keep_original_path(monkeypatch):
+    """Orientation records must carry the query path, not the transformed
+    ndarray (upstream PR #155)."""
+    import image_match.signature_database_base as base_mod
+
+    d = _StubDriver()
+    seen = []
+    monkeypatch.setattr(base_mod, "make_record", lambda path, gis, k, N, img=None, **kw: seen.append(path) or {"path": path})
+    d._orientation_records("test.jpg", all_orientations=True)
+    assert seen == ["test.jpg"] * 16
 
 
 def _pool_spy(monkeypatch):
@@ -406,7 +418,7 @@ def test_orientation_records_rotation_order(monkeypatch):
 
     d = _StubDriver()
     seen = []
-    monkeypatch.setattr(base_mod, "make_record", lambda img, *a, **kw: seen.append(np.asarray(img)) or {"signature": []})
+    monkeypatch.setattr(base_mod, "make_record", lambda path, *a, img=None, **kw: seen.append(np.asarray(img)) or {"signature": []})
     d._orientation_records("test.jpg", all_orientations=True)
     # product(inversions, rotations, mirrors): mirrors vary fastest
     base = seen[0]
