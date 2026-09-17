@@ -1,4 +1,4 @@
-FROM python:3.13
+FROM python:3.14
 
 COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
 ENV UV_LINK_MODE=copy
