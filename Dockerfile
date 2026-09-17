@@ -1,14 +1,11 @@
-FROM python:3.5
+FROM python:3.9
 
-RUN apt-get update && apt-get install -y libblas-dev liblapack-dev gfortran
-
-RUN pip install --upgrade pip
-RUN pip install numpy scipy
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 
+COPY pyproject.toml uv.lock .python-version README.md /usr/src/app/
 COPY image_match /usr/src/app/image_match
-COPY setup.py /usr/src/app/setup.py
 
-RUN pip install --no-cache-dir -e .[dev]
+RUN uv sync --frozen --all-extras

@@ -1,0 +1,127 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "image-match"
+dynamic = ["version"]
+description = "image_match is a simple package for finding approximate image matches from a corpus."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache License 2.0" }
+authors = [
+    { name = "Ryan Henderson", email = "ryan@bigchaindb.com" },
+]
+keywords = ["image", "signature", "match", "deduplication", "perceptual-hash"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Database",
+    "Topic :: Database :: Database Engines/Servers",
+    "Topic :: Software Development",
+    "Natural Language :: English",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = [
+    "numpy>=1.24",
+    "Pillow>=10.0",
+    "scikit-image>=0.22",
+    "elasticsearch>=7.17.0,<8.0.0",
+    "six>=1.16.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "coverage",
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+]
+docs = [
+    "Sphinx>=7.2,<8.0",
+    "sphinx-rtd-theme>=2.0",
+]
+mongo = [
+    "pymongo>=4.0",
+]
+extra = [
+    "cairosvg>=2.0,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/ascribe/image-match/"
+Documentation = "http://image-match.readthedocs.io/en/latest/"
+
+[dependency-groups]
+dev = [
+    "coverage",
+    "ipdb",
+    "ipython",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-timeout>=2.3",
+    "pytest-xdist>=3.0",
+    "ruff>=0.15",
+    "radon>=6.0",
+    "xenon>=0.9",
+    "vulture>=2.16",
+    "pyright>=1.1.400",
+    "bandit>=1.8",
+    "pre-commit>=4.0",
+]
+
+[tool.hatch.version]
+path = "image_match/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["image_match"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".*", "*.egg", "*.egg-info", "env*", "devenv*", "docs"]
+markers = [
+    "integration: marks tests that need a running Elasticsearch/MongoDB",
+]
+
+[tool.ruff]
+exclude = ["docs", "build", "dist", "*.egg-info", ".venv"]
+line-length = 160
+indent-width = 4
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+preview = true
+
+[tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
+extend-select = [
+    "I",
+]
+select = ["E9", "F82", "D"]
+# D200/D205/D400/D401/D415: docstring style conventions relaxed for legacy docstrings
+ignore = ["D203", "D213", "D100", "F821", "D200", "D205", "D400", "D401", "D415"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.pyright]
+exclude = ["**/__pycache__", "**/dist", "**/build", "**/venv", "**/.venv"]
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests"]
+# B101: asserts are intentional input validation; callers may rely on AssertionError
+skips = ["B101"]
+
+[tool.vulture]
+exclude = ["dist", "build", "venv", ".venv", "tests", "docs"]
+min_confidence = 80
+paths = ["."]
+sort_by_size = true
