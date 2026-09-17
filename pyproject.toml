@@ -129,6 +129,9 @@ ignore = ["D203", "D213", "D100", "D200", "D205", "D400", "D401", "D415", "ANN40
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "ANN"]
 
+[tool.coverage.report]
+fail_under = 80
+
 [tool.pyright]
 exclude = ["**/__pycache__", "**/dist", "**/build", "**/venv", "**/.venv"]
 

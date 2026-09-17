@@ -66,3 +66,132 @@ def test_difference():
     sig2 = gis.generate_signature("test_diff.jpg")
     dist = gis.normalized_distance(sig1, sig2)
     assert dist == 0.42672771706789686
+
+
+# --- constructor validation -------------------------------------------------
+
+
+def test_init_validation():
+    with pytest.raises(AssertionError):
+        ImageSignature(crop_percentiles=(5,))  # not a pair
+    with pytest.raises(AssertionError):
+        ImageSignature(crop_percentiles=(-1, 95))
+    with pytest.raises(AssertionError):
+        ImageSignature(crop_percentiles=(95, 5))  # lower >= upper
+    with pytest.raises(AssertionError):
+        ImageSignature(n=1.5)
+    with pytest.raises(AssertionError):
+        ImageSignature(n=1)
+    with pytest.raises(AssertionError):
+        ImageSignature(P="x")
+    with pytest.raises(AssertionError):
+        ImageSignature(P=0)
+    with pytest.raises(AssertionError):
+        ImageSignature(diagonal_neighbors=1)
+
+
+def test_init_crop_percentiles_none():
+    gis = ImageSignature(crop_percentiles=None)
+    assert gis.lower_percentile == 0
+    assert gis.upper_percentile == 100
+    # no-crop path through generate_signature -> compute_grid_points(window=None)
+    sig = gis.generate_signature("test.jpg")
+    assert sig.shape == (648,)
+
+
+# --- preprocess_image input types -------------------------------------------
+
+
+def test_preprocess_pathlike():
+    from pathlib import Path
+
+    arr = ImageSignature.preprocess_image(Path("test.jpg"))
+    assert arr.ndim == 2
+
+
+def test_preprocess_bytes_path():
+    # bytes input without bytestream -> treated as a bytes-encoded path
+    arr = ImageSignature.preprocess_image(b"test.jpg")
+    assert arr.ndim == 2
+
+
+def test_preprocess_ndarray_color_and_gray():
+    import numpy as np
+    from PIL import Image
+
+    color = np.array(Image.open("test.jpg").convert("RGB"))
+    gray = ImageSignature.preprocess_image(color)
+    assert gray.ndim == 2
+
+    # already-grayscale ndarray is returned as-is
+    back = ImageSignature.preprocess_image(gray)
+    assert back.shape == gray.shape
+
+
+def test_preprocess_invalid_type():
+    with pytest.raises(TypeError):
+        ImageSignature.preprocess_image(12345)
+
+
+def test_preprocess_bytestream_requires_bytes():
+    gis = ImageSignature()
+    with pytest.raises(TypeError, match="bytestream"):
+        gis.generate_signature("test.jpg", bytestream=True)
+
+
+def test_preprocess_truncated_stream():
+    gis = ImageSignature()
+    with open("test.jpg", "rb") as f:
+        data = f.read()[:100]  # truncated jpeg
+    with pytest.raises(CorruptImageError):
+        gis.generate_signature(data, bytestream=True)
+
+
+def test_preprocess_svg_stream():
+    pytest.importorskip("cairosvg", reason="cairosvg not installed (install the 'extra' extra)")
+    gis = ImageSignature()
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="red"/></svg>'
+    sig = gis.generate_signature(svg, bytestream=True)
+    assert sig.shape == (648,)
+
+
+# --- crop / grid / threshold helpers ----------------------------------------
+
+
+def test_crop_image_featureless_and_fix_ratio():
+    import numpy as np
+
+    # uniform image -> featureless -> default percentile region
+    flat = np.zeros((50, 50))
+    limits = ImageSignature.crop_image(flat)
+    assert limits == [(2, 47), (2, 47)]
+
+    # fix_ratio picks the larger range for both axes
+    textured = np.tile(np.arange(50.0)[:, None], (1, 80))  # varies along x only
+    limits = ImageSignature.crop_image(textured, fix_ratio=True)
+    assert limits[0] == limits[1]
+
+
+def test_compute_grid_points_default_window():
+    import numpy as np
+
+    x, y = ImageSignature.compute_grid_points(np.zeros((100, 100)), n=9)
+    assert len(x) == len(y) == 9
+
+
+def test_normalize_and_threshold_featureless():
+    import numpy as np
+
+    # all values below identical_tolerance -> early exit, stays zeroed
+    arr = np.zeros((5, 5, 8))
+    ImageSignature.normalize_and_threshold(arr)
+    assert np.all(arr == 0.0)
+
+
+def test_static_normalized_distance():
+    import numpy as np
+
+    a = np.array([1.0, 2.0])
+    assert ImageSignature.normalized_distance(a, a) == 0.0
+    # two zero vectors -> 0/0 -> nan (the base-module variant replaces with nan_value)
+    assert np.isnan(ImageSignature.normalized_distance(np.zeros(2), np.zeros(2)))

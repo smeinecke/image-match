@@ -151,3 +151,24 @@ def test_parallel_words(ses):
     r = ses.search_image("test1.jpg", n_parallel_words=4)
     assert len(r) == 2
     assert r[0]["dist"] == 0.0
+
+
+def test_word_limit(ses):
+    ses.add_image("test1.jpg")
+    # only the first few words are scanned; the image should still match itself
+    r = ses.search_image("test1.jpg", word_limit=8)
+    assert len(r) == 1
+    assert r[0]["dist"] == 0.0
+
+
+def test_n_parallel_words_validation(ses):
+    ses.add_image("test1.jpg")
+    with pytest.raises(ValueError, match="n_parallel_words"):
+        ses.search_image("test1.jpg", n_parallel_words=0)
+
+
+def test_maximum_matches_skips_common_words(ses):
+    ses.add_image("test1.jpg")
+    # maximum_matches=0 -> every word bucket is over the limit -> no matches
+    r = ses.search_image("test1.jpg", maximum_matches=0)
+    assert len(r) == 0

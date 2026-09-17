@@ -86,3 +86,32 @@ async def test_duplicate_removal(ases):
     await asyncio.sleep(1)
     r = await ases.search_image("test1.jpg")
     assert len(r) == 1
+
+
+async def test_all_orientations(ases):
+    from PIL import Image
+
+    im = Image.open("test1.jpg")
+    im.rotate(90, expand=True).save("rotated_test1.jpg")
+
+    await ases.add_image("test1.jpg", refresh_after=True)
+    r = await ases.search_image("rotated_test1.jpg", all_orientations=True)
+    assert len(r) == 1
+    assert r[0]["path"] == "test1.jpg"
+    assert r[0]["dist"] < 0.1  # some error from rotation
+
+
+async def test_add_image_variants(ases):
+    with open("test1.jpg", "rb") as f:
+        await ases.add_image("bytestream_test", img=f.read(), bytestream=True, refresh_after=True)
+    await ases.add_image("custom_name_test", img="test1.jpg", bytestream=False, refresh_after=True)
+    r = await ases.search_image("test1.jpg")
+    paths = {x["path"] for x in r}
+    assert {"bytestream_test", "custom_name_test"} <= paths
+
+
+async def test_lookup_with_cutoff(ases):
+    await ases.add_image("test2.jpg", refresh_after=True)
+    ases.distance_cutoff = 0.01
+    r = await ases.search_image("test1.jpg")
+    assert len(r) == 0

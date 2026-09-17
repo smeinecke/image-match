@@ -168,3 +168,22 @@ def test_duplicate_removal(ses):
     sleep(1)
     r = ses.search_image("test1.jpg")
     assert len(r) == 1
+
+
+def test_duplicate_removal_with_limit(ses):
+    for i in range(10):
+        ses.add_image("test1.jpg", refresh_after=(i == 9))
+    # scan cap of 3 -> only 2 deletes happen, 8 remain
+    ses.delete_duplicates("test1.jpg", limit=3)
+    sleep(1)
+    r = ses.search_image("test1.jpg")
+    assert len(r) == 8
+
+
+def test_pre_filter_list(ses):
+    """pre_filter accepts a list of clauses (bool/filter list semantics)."""
+    ses.add_image("test1.jpg", metadata={"tenant_id": "foo"}, refresh_after=True)
+    ses.add_image("test2.jpg", metadata={"tenant_id": "bar"}, refresh_after=True)
+    r = ses.search_image("test1.jpg", pre_filter=[{"term": {"metadata.tenant_id": "foo"}}])
+    assert len(r) == 1
+    assert r[0]["metadata"]["tenant_id"] == "foo"
