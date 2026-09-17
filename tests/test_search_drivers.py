@@ -187,3 +187,11 @@ def test_pre_filter_list(ses):
     r = ses.search_image("test1.jpg", pre_filter=[{"term": {"metadata.tenant_id": "foo"}}])
     assert len(r) == 1
     assert r[0]["metadata"]["tenant_id"] == "foo"
+
+
+def test_nonexistent_index_propagates(backend, requires_download):
+    """Fault injection against the real server: querying an index that does
+    not exist must surface a NotFoundError, not silently return []."""
+    driver = backend.driver(backend.client, index=random_index_name("no_such_index"))
+    with pytest.raises(backend.exc.NotFoundError):
+        driver.search_image("test1.jpg")
