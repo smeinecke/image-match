@@ -14,7 +14,9 @@ if TYPE_CHECKING:
 class SignatureES(SignatureDatabaseBase):
     """Elasticsearch driver for image-match"""
 
-    def __init__(self, es: Elasticsearch, index: str = "images", timeout: str = "10s", size: int = 100, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, es: Elasticsearch, index: str = "images", timeout: str = "10s", size: int = 100, delete_duplicates_limit: int = 10000, *args: Any, **kwargs: Any
+    ) -> None:
         """Extra setup for Elasticsearch
 
         Args:
@@ -22,6 +24,8 @@ class SignatureES(SignatureDatabaseBase):
             index (Optional[string]): a name for the Elasticsearch index (default 'images')
             timeout (Optional[int]): how long to wait on an Elasticsearch query, in seconds (default 10)
             size (Optional[int]): maximum number of Elasticsearch results (default 100)
+            delete_duplicates_limit (Optional[int]): maximum number of duplicate candidates
+                scanned per delete_duplicates call (default 10000)
             *args (Optional): Variable length argument list to pass to base constructor
             **kwargs (Optional): Arbitrary keyword arguments to pass to base constructor
 
@@ -44,6 +48,7 @@ class SignatureES(SignatureDatabaseBase):
         self.index = index
         self.timeout = timeout
         self.size = size
+        self.delete_duplicates_limit = delete_duplicates_limit
 
         super().__init__(*args, **kwargs)
 
@@ -111,16 +116,21 @@ class SignatureES(SignatureDatabaseBase):
         rec["timestamp"] = datetime.now()
         self.es.index(index=self.index, document=rec, refresh=refresh_after)
 
-    def delete_duplicates(self, path: str) -> None:
+    def delete_duplicates(self, path: str, limit: int | None = None) -> None:
         """Delete all but one entries in elasticsearch whose `path` value is equivalent to that of path.
 
         Args:
             path (string): path value to compare to those in the elastic search
+            limit (Optional[int]): maximum number of duplicate candidates to scan;
+                defaults to the instance's delete_duplicates_limit (default 10000)
 
         """
+        if limit is None:
+            limit = self.delete_duplicates_limit
+
         matching_paths = [
             item["_id"]
-            for item in self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, size=10000)["hits"]["hits"]
+            for item in self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, size=limit)["hits"]["hits"]
             if item["_source"].get("path") == path
         ]
 

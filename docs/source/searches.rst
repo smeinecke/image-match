@@ -18,9 +18,9 @@ up and running. Once that's done, you can set it up like so:
     ses = SignatureES(es)
 
 
-By default, the Elasticsearch index name is ``'images'`` and the document type
-``'image'``, but you can change these via the ``index`` and ``doc_type``
-parameters.
+By default, the Elasticsearch index name is ``'images'``, but you can change
+it via the ``index`` parameter. The ``size`` and ``timeout`` parameters control
+how many word matches are retrieved per search and how long to wait for them.
 
 Now, let's store those pictures from before in the database:
 
@@ -203,4 +203,22 @@ the metadata directly, but the user can use Elasticsearch's QL, for example with
 .. code-block:: python
 
     ses.es.search('images', body={'query': {'match': {'metadata.things': 'stuff!'}}})
+
+Removing duplicates
+^^^^^^^^^^^^^^^^^^^
+If the same image was added more than once, ``delete_duplicates`` removes all
+but one record with a given ``path``:
+
+.. code-block:: python
+
+    ses.delete_duplicates('https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg')
+
+The method first scans for records matching the path, which is capped at
+``delete_duplicates_limit`` candidates (default ``10000``). Raise the limit on
+the driver if a path may have more duplicates, or override it per call:
+
+.. code-block:: python
+
+    ses = SignatureES(es, delete_duplicates_limit=50000)
+    ses.delete_duplicates('https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg', limit=50000)
 

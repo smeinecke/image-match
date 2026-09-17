@@ -50,7 +50,9 @@ class SignatureOpenSearch(SignatureES):
 
     """
 
-    def __init__(self, es: OpenSearch, index: str = "images", timeout: str = "10s", size: int = 100, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, es: OpenSearch, index: str = "images", timeout: str = "10s", size: int = 100, delete_duplicates_limit: int = 10000, *args: Any, **kwargs: Any
+    ) -> None:
         """Extra setup for OpenSearch
 
         Args:
@@ -58,13 +60,15 @@ class SignatureOpenSearch(SignatureES):
             index (Optional[string]): a name for the OpenSearch index (default 'images')
             timeout (Optional[int]): how long to wait on an OpenSearch query, in seconds (default 10)
             size (Optional[int]): maximum number of OpenSearch results (default 100)
+            delete_duplicates_limit (Optional[int]): maximum number of duplicate candidates
+                scanned per delete_duplicates call (default 10000)
             *args (Optional): Variable length argument list to pass to base constructor
             **kwargs (Optional): Arbitrary keyword arguments to pass to base constructor
 
         """
         # the OpenSearch client is API-identical to the Elasticsearch client
         # for the operations used here; the cast is purely for type checkers
-        super().__init__(cast("Elasticsearch", es), index=index, timeout=timeout, size=size, *args, **kwargs)
+        super().__init__(cast("Elasticsearch", es), index=index, timeout=timeout, size=size, delete_duplicates_limit=delete_duplicates_limit, *args, **kwargs)
 
     @override
     def _search(self, body: dict) -> Any:
