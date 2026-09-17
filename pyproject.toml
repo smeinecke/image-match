@@ -133,7 +133,15 @@ ignore = ["D203", "D213", "D100", "D200", "D205", "D400", "D401", "D415", "ANN40
 fail_under = 80
 
 [tool.pyright]
-exclude = ["**/__pycache__", "**/dist", "**/build", "**/venv", "**/.venv"]
+typeCheckingMode = "strict"
+# Unknown-* rules only measure third-party stub completeness
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+reportMissingTypeStubs = false
+reportPrivateUsage = false
+exclude = ["**/__pycache__", "**/dist", "**/build", "**/venv", "**/.venv", "tests", "docs"]
 
 [tool.bandit]
 exclude_dirs = [".venv", "tests"]

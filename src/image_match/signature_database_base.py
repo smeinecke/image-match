@@ -10,7 +10,7 @@ from .goldberg import ImageInput, ImageSignature
 
 # a database filter clause: dict for MongoDB, dict or list of clauses for
 # Elasticsearch (e.g. {"term": {"metadata.tenant_id": "foo"}})
-type PreFilter = dict | list | None
+type PreFilter = dict[str, Any] | list[dict[str, Any]] | None
 
 
 class SignatureDatabaseBase:
@@ -22,7 +22,7 @@ class SignatureDatabaseBase:
 
     """
 
-    def search_single_record(self, rec: dict, pre_filter: PreFilter = None) -> list[dict]:
+    def search_single_record(self, rec: dict[str, Any], pre_filter: PreFilter = None) -> list[dict[str, Any]]:
         """Search for a matching image record.
 
         Must be implemented by derived class.
@@ -87,7 +87,7 @@ class SignatureDatabaseBase:
         """
         raise NotImplementedError
 
-    def insert_single_record(self, rec: dict) -> None:
+    def insert_single_record(self, rec: dict[str, Any]) -> None:
         """Insert an image record.
 
         Must be implemented by derived class.
@@ -191,8 +191,8 @@ class SignatureDatabaseBase:
         self.N = N
         self.n_grid = n_grid
 
-        # Check float input
-        if not isinstance(distance_cutoff, (int, float)):
+        # Check float input (runtime guard for untyped callers)
+        if not isinstance(distance_cutoff, (int, float)):  # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError("distance_cutoff should be a float")
         if distance_cutoff < 0.0:
             raise ValueError(f"distance_cutoff should be > 0 (got {distance_cutoff!r})")
@@ -203,7 +203,9 @@ class SignatureDatabaseBase:
 
         self.gis = ImageSignature(n=n_grid, crop_percentiles=crop_percentile, *signature_args, **signature_kwargs)
 
-    def add_image(self, path: str, img: ImageInput | None = None, bytestream: bool = False, metadata: dict | None = None, *args: Any, **kwargs: Any) -> None:
+    def add_image(
+        self, path: str, img: ImageInput | None = None, bytestream: bool = False, metadata: dict[str, Any] | None = None, *args: Any, **kwargs: Any
+    ) -> None:
         """Add a single image to the database
 
         Args:
@@ -228,7 +230,7 @@ class SignatureDatabaseBase:
 
     def search_image(
         self, path: ImageInput, all_orientations: bool = False, bytestream: bool = False, pre_filter: PreFilter = None, **kwargs: Any
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Search for matches
 
         Args:
@@ -268,7 +270,7 @@ class SignatureDatabaseBase:
 
         return dedupe_results(result)
 
-    def _orientation_records(self, path: ImageInput, all_orientations: bool = False, bytestream: bool = False) -> list[dict]:
+    def _orientation_records(self, path: ImageInput, all_orientations: bool = False, bytestream: bool = False) -> list[dict[str, Any]]:
         """Build one search record per requested image orientation.
 
         Pure CPU work (image decode + signature generation); async drivers run
@@ -307,7 +309,7 @@ class SignatureDatabaseBase:
         return records
 
 
-def dedupe_results(result: list[dict]) -> list[dict]:
+def dedupe_results(result: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Drop duplicate ids and sort by dist."""
     ids = set()
     unique = []
@@ -320,8 +322,8 @@ def dedupe_results(result: list[dict]) -> list[dict]:
 
 
 def make_record(
-    path: ImageInput, gis: ImageSignature, k: int, N: int, img: ImageInput | None = None, bytestream: bool = False, metadata: dict | None = None
-) -> dict:
+    path: ImageInput, gis: ImageSignature, k: int, N: int, img: ImageInput | None = None, bytestream: bool = False, metadata: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Makes a record suitable for database insertion.
 
     Note:
@@ -434,9 +436,8 @@ def get_words(array: np.ndarray, k: int, N: int) -> np.ndarray:
         if pos + k <= array.shape[0]:
             words[i] = array[pos : pos + k]
         else:
-            temp = array[pos:].copy()
-            temp.resize(k)
-            words[i] = temp
+            tail = array[pos:]
+            words[i, : tail.size] = tail  # rest stays zero-padded
 
     return words
 

@@ -53,7 +53,7 @@ class SignatureES(SignatureDatabaseBase):
         super().__init__(*args, **kwargs)
 
     @override
-    def search_single_record(self, rec: dict, pre_filter: PreFilter = None) -> list[dict]:
+    def search_single_record(self, rec: dict[str, Any], pre_filter: PreFilter = None) -> list[dict[str, Any]]:
         """Search for a matching image record.
 
         Args:
@@ -72,7 +72,7 @@ class SignatureES(SignatureDatabaseBase):
 
         return format_hits(res, signature, self.distance_cutoff)
 
-    def _search(self, body: dict) -> Any:
+    def _search(self, body: dict[str, Any]) -> Any:
         """Run the word-match search.
 
         Isolated so subclasses can adapt the call to clients with different
@@ -81,7 +81,7 @@ class SignatureES(SignatureDatabaseBase):
         return self.es.search(index=self.index, body=body, size=self.size, timeout=self.timeout)
 
     @override
-    def insert_single_record(self, rec: dict, refresh_after: bool = False) -> None:
+    def insert_single_record(self, rec: dict[str, Any], refresh_after: bool = False) -> None:
         """Insert an image record.
 
         Args:
@@ -110,12 +110,12 @@ class SignatureES(SignatureDatabaseBase):
         for id_tag in matching_paths[1:]:
             self.es.delete(index=self.index, id=id_tag)
 
-    def _path_hits(self, path: str, limit: int) -> list[dict]:
+    def _path_hits(self, path: str, limit: int) -> list[dict[str, Any]]:
         """Search for documents whose path field fuzzy-matches `path`."""
         return self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, size=limit)["hits"]["hits"]
 
 
-def build_word_query(rec: dict, pre_filter: PreFilter = None) -> dict:
+def build_word_query(rec: dict[str, Any], pre_filter: PreFilter = None) -> dict[str, Any]:
     """Build the bool/should term query over a record's simple_word_* fields.
 
     Removes 'path' and 'metadata' from rec; the caller pops 'signature'.
@@ -125,7 +125,7 @@ def build_word_query(rec: dict, pre_filter: PreFilter = None) -> dict:
     rec.pop("metadata", None)
 
     should = [{"term": {word: rec[word]}} for word in rec if word.startswith("simple_word_")]
-    body: dict = {"query": {"bool": {"should": should}}, "_source": {"excludes": ["simple_word_*"]}}
+    body: dict[str, Any] = {"query": {"bool": {"should": should}}, "_source": {"excludes": ["simple_word_*"]}}
 
     if pre_filter is not None:
         body["query"]["bool"]["filter"] = pre_filter
@@ -133,7 +133,7 @@ def build_word_query(rec: dict, pre_filter: PreFilter = None) -> dict:
     return body
 
 
-def format_hits(hits: list[dict], signature: np.ndarray, distance_cutoff: float) -> list[dict]:
+def format_hits(hits: list[dict[str, Any]], signature: np.ndarray, distance_cutoff: float) -> list[dict[str, Any]]:
     """Compute distances to a signature and return cutoff-filtered hit dicts."""
     sigs = np.array([x["_source"]["signature"] for x in hits])
 

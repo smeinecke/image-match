@@ -72,12 +72,12 @@ class AsyncSignatureES(SignatureDatabaseBase):
 
         super().__init__(*args, **kwargs)
 
-    async def _search(self, body: dict) -> Any:
+    async def _search(self, body: dict[str, Any]) -> Any:
         """Run the word-match search (async counterpart of SignatureES._search)."""
         return await self.es.search(index=self.index, body=body, size=self.size, timeout=self.timeout)
 
     @override
-    async def search_single_record(self, rec: dict, pre_filter: PreFilter = None) -> list[dict]:
+    async def search_single_record(self, rec: dict[str, Any], pre_filter: PreFilter = None) -> list[dict[str, Any]]:
         """Search for a matching image record.
 
         Args:
@@ -97,7 +97,7 @@ class AsyncSignatureES(SignatureDatabaseBase):
         return format_hits(res, signature, self.distance_cutoff)
 
     @override
-    async def insert_single_record(self, rec: dict, refresh_after: bool = False) -> None:
+    async def insert_single_record(self, rec: dict[str, Any], refresh_after: bool = False) -> None:
         """Insert an image record.
 
         Args:
@@ -111,7 +111,7 @@ class AsyncSignatureES(SignatureDatabaseBase):
 
     @override
     async def add_image(
-        self, path: str, img: ImageInput | None = None, bytestream: bool = False, metadata: dict | None = None, *args: Any, **kwargs: Any
+        self, path: str, img: ImageInput | None = None, bytestream: bool = False, metadata: dict[str, Any] | None = None, *args: Any, **kwargs: Any
     ) -> None:
         """Add a single image to the database.
 
@@ -135,7 +135,7 @@ class AsyncSignatureES(SignatureDatabaseBase):
     @override
     async def search_image(
         self, path: ImageInput, all_orientations: bool = False, bytestream: bool = False, pre_filter: PreFilter = None, **kwargs: Any
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Search for matches.
 
         Image preprocessing and signature generation run in a worker thread;
@@ -180,6 +180,6 @@ class AsyncSignatureES(SignatureDatabaseBase):
         for id_tag in matching_paths[1:]:
             await self.es.delete(index=self.index, id=id_tag)
 
-    async def _path_hits(self, path: str, limit: int) -> list[dict]:
+    async def _path_hits(self, path: str, limit: int) -> list[dict[str, Any]]:
         """Search for documents whose path field fuzzy-matches `path`."""
         return (await self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, size=limit))["hits"]["hits"]

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class SignatureMongo(SignatureDatabaseBase):
     """MongoDB driver for image-match"""
 
-    def __init__(self, collection: Collection, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, collection: Collection[dict[str, Any]], *args: Any, **kwargs: Any) -> None:
         """Additional MongoDB setup
 
         Args:
@@ -51,14 +51,14 @@ class SignatureMongo(SignatureDatabaseBase):
     @override
     def search_single_record(
         self,
-        rec: dict,
+        rec: dict[str, Any],
         pre_filter: PreFilter = None,
         *,
         n_parallel_words: int | None = 1,
         word_limit: int | None = None,
         process_timeout: float | None = None,
         maximum_matches: int = 1000,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Search for a matching image record.
 
         Args:
@@ -91,7 +91,7 @@ class SignatureMongo(SignatureDatabaseBase):
         queue_empty = False
 
         # create an empty queue for results
-        results_q: Queue = Queue()
+        results_q: Queue[dict[str, Any] | str] = Queue()
 
         # create a set of unique results, using MongoDB _id field
         unique_results = set()
@@ -130,7 +130,7 @@ class SignatureMongo(SignatureDatabaseBase):
                 except Empty:
                     num_workers = 0
                     break
-                if results == "STOP":
+                if isinstance(results, str):  # "STOP" sentinel
                     num_workers -= 1
                 else:
                     for key in results:
@@ -149,7 +149,7 @@ class SignatureMongo(SignatureDatabaseBase):
 
         return match_list
 
-    def _word_query_queue(self, rec: dict, word_limit: int) -> Queue:
+    def _word_query_queue(self, rec: dict[str, Any], word_limit: int) -> Queue[dict[str, Any] | str]:
         """Build the work queue of {word_field: word_value} lookups.
 
         Lazily repopulates index_names if the collection was populated after
@@ -168,7 +168,7 @@ class SignatureMongo(SignatureDatabaseBase):
         if not self.index_names:
             self._load_index_names()
 
-        initial_q: Queue = Queue()
+        initial_q: Queue[dict[str, Any] | str] = Queue()
         for field_name in self.index_names[:word_limit]:
             # a field may be absent from rec if the index was built with a
             # different N (number of words); skip instead of raising KeyError
@@ -180,7 +180,7 @@ class SignatureMongo(SignatureDatabaseBase):
         return initial_q
 
     @override
-    def insert_single_record(self, rec: dict) -> None:
+    def insert_single_record(self, rec: dict[str, Any]) -> None:
         """Insert an image record, creating the word indexes if needed.
 
         Args:
@@ -206,7 +206,13 @@ class SignatureMongo(SignatureDatabaseBase):
 
 
 def get_next_match(
-    result_q: Queue, word: dict, collection: Collection, signature: np.ndarray, cutoff: float = 0.5, max_in_cursor: int = 100, pre_filter: PreFilter = None
+    result_q: Queue[dict[str, Any] | str],
+    word: dict[str, Any],
+    collection: Collection[dict[str, Any]],
+    signature: np.ndarray,
+    cutoff: float = 0.5,
+    max_in_cursor: int = 100,
+    pre_filter: dict[str, Any] | None = None,
 ) -> None:
     """Given a cursor, iterate through matches
 

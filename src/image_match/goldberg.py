@@ -14,7 +14,7 @@ except ImportError:
     svg2png = None
 
 # accepted inputs anywhere an image can be loaded from
-type ImageInput = str | os.PathLike | bytes | np.ndarray
+type ImageInput = str | os.PathLike[str] | bytes | np.ndarray
 
 
 class CorruptImageError(RuntimeError):
@@ -264,7 +264,8 @@ class ImageSignature:
                 return imread(image_or_path, as_gray=True)
             return rgb2gray(arr)
 
-        if isinstance(image_or_path, np.ndarray):
+        # runtime dispatch for untyped callers; statically already narrowed
+        if isinstance(image_or_path, np.ndarray):  # pyright: ignore[reportUnnecessaryIsInstance]
             try:
                 return rgb2gray(image_or_path)
             except ValueError:
@@ -408,17 +409,16 @@ class ImageSignature:
                      0.11094163,  0.10180622,  0.04633349,  0.02704855]])
 
         """
-        if P is None:
-            P = max(2.0, int(0.5 + min(image.shape) / 20.0))  # per the paper
+        p = P if P is not None else max(2.0, int(0.5 + min(image.shape) / 20.0))  # per the paper
 
         avg_grey = np.zeros((x_coords.shape[0], y_coords.shape[0]))
 
         for i, x in enumerate(x_coords):  # not the fastest implementation
-            lower_x_lim = int(max([x - P / 2, 0]))
-            upper_x_lim = int(min([lower_x_lim + P, image.shape[0]]))
+            lower_x_lim = int(max([x - p / 2, 0]))
+            upper_x_lim = int(min([lower_x_lim + p, image.shape[0]]))
             for j, y in enumerate(y_coords):
-                lower_y_lim = int(max([y - P / 2, 0]))
-                upper_y_lim = int(min([lower_y_lim + P, image.shape[1]]))
+                lower_y_lim = int(max([y - p / 2, 0]))
+                upper_y_lim = int(min([lower_y_lim + p, image.shape[1]]))
 
                 avg_grey[i, j] = np.mean(image[lower_x_lim:upper_x_lim, lower_y_lim:upper_y_lim])  # no smoothing here as in the paper
 

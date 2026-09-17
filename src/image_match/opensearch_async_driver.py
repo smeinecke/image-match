@@ -55,7 +55,7 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
         )
 
     @override
-    async def _search(self, body: dict) -> Any:
+    async def _search(self, body: dict[str, Any]) -> Any:
         # opensearch-py reserves the 'timeout'/'request_timeout' params for the
         # HTTP request timeout, so the ES-style query-level timeout string can't
         # be sent; map it to a numeric request timeout instead
@@ -66,7 +66,7 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
         )
 
     @override
-    async def insert_single_record(self, rec: dict, refresh_after: bool = False) -> None:
+    async def insert_single_record(self, rec: dict[str, Any], refresh_after: bool = False) -> None:
         """Insert an image record.
 
         Args:

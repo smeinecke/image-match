@@ -71,7 +71,7 @@ class SignatureOpenSearch(SignatureES):
         super().__init__(cast("Elasticsearch", es), index=index, timeout=timeout, size=size, delete_duplicates_limit=delete_duplicates_limit, *args, **kwargs)
 
     @override
-    def _search(self, body: dict) -> Any:
+    def _search(self, body: dict[str, Any]) -> Any:
         # opensearch-py reserves the 'timeout'/'request_timeout' params for the
         # HTTP request timeout, so the ES-style query-level timeout string can't
         # be sent; map it to a numeric request timeout instead
@@ -82,7 +82,7 @@ class SignatureOpenSearch(SignatureES):
         )
 
     @override
-    def insert_single_record(self, rec: dict, refresh_after: bool = False) -> None:
+    def insert_single_record(self, rec: dict[str, Any], refresh_after: bool = False) -> None:
         """Insert an image record.
 
         Args:
