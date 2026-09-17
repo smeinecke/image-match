@@ -52,8 +52,8 @@ services:
     volumes:
       - .:/usr/src/app/
       - /usr/src/app/.venv
-    working_dir: /usr/src/app/docs
-    command: uv run --all-extras make html
+    working_dir: /usr/src/app
+    command: uv run --all-extras make docs
 
   vdocs:
     image: nginx:alpine

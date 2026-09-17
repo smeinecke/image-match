@@ -1,7 +1,8 @@
-[![PyPI](https://img.shields.io/pypi/status/image-match.svg?maxAge=2592000)](https://pypi.python.org/pypi/image-match)
+[![CI](https://github.com/smeinecke/image-match/actions/workflows/check.yml/badge.svg)](https://github.com/smeinecke/image-match/actions/workflows/check.yml)
 [![PyPI](https://img.shields.io/pypi/v/image-match.svg)](https://pypi.python.org/pypi/image-match)
+[![Release](https://img.shields.io/github/v/release/smeinecke/image-match)](https://github.com/smeinecke/image-match/releases)
 [![Documentation Status](https://github.com/smeinecke/image-match/actions/workflows/docs.yml/badge.svg)](https://smeinecke.github.io/image-match/)
-[![codecov](https://codecov.io/gh/edjolabs/image-match/branch/master/graph/badge.svg)](https://codecov.io/gh/edjolabs/image-match)
+[![Python](https://img.shields.io/badge/python-%3E%3D3.13-blue)](https://pypi.org/project/image-match/)
 
 ![image-match](https://cloud.githubusercontent.com/assets/6517700/17741093/41040a64-649b-11e6-8499-48b78ddca56b.png)
 

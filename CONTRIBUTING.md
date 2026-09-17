@@ -1,0 +1,50 @@
+# Contributing
+
+## Setup
+
+Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
+
+```bash
+git clone https://github.com/smeinecke/image-match.git
+cd image-match
+uv sync --all-extras
+```
+
+## Validate
+
+```bash
+make validate   # ruff format+lint, radon/xenon, bandit, pyright, vulture
+make test       # unit tests
+make test-cov   # unit tests with coverage (must stay above 80%)
+make docs       # build Sphinx docs (warnings are errors)
+```
+
+## Integration tests
+
+Integration tests run against live Elasticsearch, OpenSearch and MongoDB in Docker:
+
+```bash
+make test-integration-local   # starts services, runs tests, stops services
+```
+
+## Pull requests
+
+- Keep changes in logically grouped commits.
+- All checks (`make validate`, unit tests, integration tests, docs build)
+  run in CI on every PR and must pass.
+- New public API needs unit tests and an integration test where possible.
+- Preserve compatibility with existing indexed data: signatures, word
+  encodings and stored record formats must not change silently.
+
+## Releases
+
+Releases are cut from tags. The tag must match `__version__` in
+`src/image_match/__init__.py`:
+
+```bash
+git tag v2.0.1 && git push origin v2.0.1
+```
+
+The release workflow builds the wheel/sdist, attests build provenance,
+publishes to PyPI via OIDC trusted publishing, and creates a GitHub
+Release with the artifacts attached.
