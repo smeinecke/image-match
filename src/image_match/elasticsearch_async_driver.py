@@ -5,16 +5,13 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, override
+from typing import Any, override
 
-from .elasticsearch_driver import build_word_query, duplicate_ids, exact_path_ids, format_hits, helpers_module
+from .elasticsearch_driver import SearchClient, build_word_query, duplicate_ids, exact_path_ids, format_hits, helpers_module
 from .signature_database_base import ImageInput, PreFilter, SignatureDatabaseBase, _normalize_metadata, dedupe_results, make_record
 
-if TYPE_CHECKING:
-    from elasticsearch import AsyncElasticsearch
 
-
-class AsyncSignatureES(SignatureDatabaseBase):
+class AsyncSignatureES[ClientT: SearchClient](SignatureDatabaseBase):
     """Asynchronous Elasticsearch driver for image-match.
 
     API-identical to SignatureES, but every database-touching method is a
@@ -43,7 +40,7 @@ class AsyncSignatureES(SignatureDatabaseBase):
 
     def __init__(
         self,
-        es: AsyncElasticsearch,
+        es: ClientT,
         index: str = "images",
         timeout: str = "10s",
         size: int = 100,

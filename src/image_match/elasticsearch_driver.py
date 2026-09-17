@@ -1,22 +1,32 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, override
+from typing import Any, Protocol, override
 
 import numpy as np
 
 from .signature_database_base import PreFilter, SignatureDatabaseBase, normalized_distance
 
-if TYPE_CHECKING:
-    from elasticsearch import Elasticsearch
+
+class SearchClient(Protocol):
+    """Structural type for the client subset the drivers use.
+
+    Elasticsearch, OpenSearch, and their async variants all satisfy this
+    (async methods are still Callable[..., Any] — they return awaitables).
+    """
+
+    search: Callable[..., Any]
+    index: Callable[..., Any]
+    delete: Callable[..., Any]
 
 
-class SignatureES(SignatureDatabaseBase):
+class SignatureES[ClientT: SearchClient](SignatureDatabaseBase):
     """Elasticsearch driver for image-match"""
 
     def __init__(
         self,
-        es: Elasticsearch,
+        es: ClientT,
         index: str = "images",
         timeout: str = "10s",
         size: int = 100,

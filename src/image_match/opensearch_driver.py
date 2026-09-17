@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import TYPE_CHECKING, Any, override
 
 from .elasticsearch_driver import SignatureES
 
 if TYPE_CHECKING:
-    from elasticsearch import Elasticsearch
     from opensearchpy import OpenSearch
 
 
@@ -46,7 +45,7 @@ def _index_kwargs(index: str, rec: dict[str, Any], refresh_after: bool) -> dict[
     return {"index": index, "body": rec, "params": {"refresh": "true" if refresh_after else "false"}}
 
 
-class SignatureOpenSearch(SignatureES):
+class SignatureOpenSearch(SignatureES["OpenSearch"]):
     """OpenSearch driver for image-match.
 
     Shares the record format and query DSL with SignatureES -- OpenSearch is
@@ -106,10 +105,8 @@ class SignatureOpenSearch(SignatureES):
             **kwargs (Optional): Arbitrary keyword arguments to pass to base constructor
 
         """
-        # the OpenSearch client is API-identical to the Elasticsearch client
-        # for the operations used here; the cast is purely for type checkers
         super().__init__(
-            cast("Elasticsearch", es),
+            es,
             index=index,
             timeout=timeout,
             size=size,
@@ -122,7 +119,7 @@ class SignatureOpenSearch(SignatureES):
 
     @override
     def _search(self, body: dict[str, Any]) -> Any:
-        return cast("OpenSearch", self.es).search(
+        return self.es.search(
             index=self.index,
             body=body,
             params=_search_params(self.timeout, self.size),
@@ -138,4 +135,4 @@ class SignatureOpenSearch(SignatureES):
                 making the record searchable immediately (default False)
 
         """
-        cast("OpenSearch", self.es).index(**_index_kwargs(self.index, rec, refresh_after))
+        self.es.index(**_index_kwargs(self.index, rec, refresh_after))

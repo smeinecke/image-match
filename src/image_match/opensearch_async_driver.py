@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import TYPE_CHECKING, Any, override
 
 from .elasticsearch_async_driver import AsyncSignatureES
 from .opensearch_driver import _index_kwargs, _search_params
 
 if TYPE_CHECKING:
-    from elasticsearch import AsyncElasticsearch
     from opensearchpy import AsyncOpenSearch
 
 
-class AsyncSignatureOpenSearch(AsyncSignatureES):
+class AsyncSignatureOpenSearch(AsyncSignatureES["AsyncOpenSearch"]):
     """Asynchronous OpenSearch driver for image-match.
 
     Shares the record format and query DSL with AsyncSignatureES. Differs
@@ -63,10 +62,8 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
             **kwargs (Optional): Arbitrary keyword arguments to pass to base constructor
 
         """
-        # the async OpenSearch client is API-identical to AsyncElasticsearch
-        # for the operations used here; the cast is purely for type checkers
         super().__init__(
-            cast("AsyncElasticsearch", es),
+            es,
             index=index,
             timeout=timeout,
             size=size,
@@ -79,7 +76,7 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
 
     @override
     async def _search(self, body: dict[str, Any]) -> Any:
-        return await cast("AsyncOpenSearch", self.es).search(
+        return await self.es.search(
             index=self.index,
             body=body,
             params=_search_params(self.timeout, self.size),
@@ -95,4 +92,4 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
                 making the record searchable immediately (default False)
 
         """
-        await cast("AsyncOpenSearch", self.es).index(**_index_kwargs(self.index, rec, refresh_after))
+        await self.es.index(**_index_kwargs(self.index, rec, refresh_after))
