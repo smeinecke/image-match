@@ -1,5 +1,6 @@
 """Shared constants and factories for the backend integration tests."""
 
+import asyncio
 import os
 import uuid
 from contextlib import suppress
@@ -67,6 +68,36 @@ def make_backend(name: str) -> SimpleNamespace:
     )
 
 
+def make_async_backend(name: str) -> SimpleNamespace:
+    """Instantiate the async client + driver for a search backend.
+
+    Skips the calling test if the backend's '-async' extra is not installed.
+    """
+    if name == "opensearch":
+        module = pytest.importorskip("opensearchpy", reason="opensearch-py not installed (install the 'opensearch-async' extra)")
+        if not hasattr(module, "AsyncOpenSearch"):
+            pytest.skip("opensearch-py[async] not installed (install the 'opensearch-async' extra)")
+        from image_match.opensearch_async_driver import AsyncSignatureOpenSearch
+
+        return SimpleNamespace(
+            name=name,
+            client=module.AsyncOpenSearch(os.environ.get("OPENSEARCH_URL", "http://localhost:9201")),
+            driver=AsyncSignatureOpenSearch,
+            exc=module,
+        )
+    module = pytest.importorskip("elasticsearch", reason="elasticsearch not installed (install the 'elasticsearch-async' extra)")
+    if not hasattr(module, "AsyncElasticsearch"):
+        pytest.skip("elasticsearch[async] not installed (install the 'elasticsearch-async' extra)")
+    from image_match.elasticsearch_async_driver import AsyncSignatureES
+
+    return SimpleNamespace(
+        name=name,
+        client=module.AsyncElasticsearch(os.environ.get("ELASTICSEARCH_URL", "http://localhost:9200")),
+        driver=AsyncSignatureES,
+        exc=module,
+    )
+
+
 def wait_until_ready(client, name: str) -> None:
     """Ping a backend a few times before giving up."""
     for _ in range(5):
@@ -74,6 +105,16 @@ def wait_until_ready(client, name: str) -> None:
             if client.ping():
                 return
         sleep(2)
+    pytest.fail(f"{name} not running (failed to connect)")
+
+
+async def await_until_ready(client, name: str) -> None:
+    """Async variant of wait_until_ready for async clients."""
+    for _ in range(5):
+        with suppress(Exception):
+            if await client.ping():
+                return
+        await asyncio.sleep(2)
     pytest.fail(f"{name} not running (failed to connect)")
 
 

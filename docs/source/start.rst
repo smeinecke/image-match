@@ -39,7 +39,8 @@ Install with pip
     $ pip install "image-match[elasticsearch]"   # or [opensearch], [mongo]
 
 The backend client libraries are optional extras; install only the one you
-use. See :doc:`backends` for details.
+use. Async driver variants are available as ``[elasticsearch-async]`` and
+``[opensearch-async]``. See :doc:`backends` for details.
 
 Build from source
 ^^^^^^^^^^^^^^^^^

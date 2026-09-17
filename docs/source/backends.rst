@@ -5,9 +5,11 @@ one you need:
 
 .. code-block:: bash
 
-    $ pip install "image-match[elasticsearch]"   # Elasticsearch driver
-    $ pip install "image-match[opensearch]"      # OpenSearch driver
-    $ pip install "image-match[mongo]"           # MongoDB driver
+    $ pip install "image-match[elasticsearch]"        # Elasticsearch driver
+    $ pip install "image-match[elasticsearch-async]"  # async Elasticsearch driver
+    $ pip install "image-match[opensearch]"           # OpenSearch driver
+    $ pip install "image-match[opensearch-async]"     # async OpenSearch driver
+    $ pip install "image-match[mongo]"                # MongoDB driver
 
 OpenSearch
 ----------
@@ -21,6 +23,35 @@ API-compatible with Elasticsearch 7.x for the operations used here):
     from opensearchpy import OpenSearch
 
     ses = SignatureOpenSearch(OpenSearch("http://localhost:9200"))
+
+Async drivers
+-------------
+``AsyncSignatureES`` and ``AsyncSignatureOpenSearch`` mirror the synchronous
+drivers, but every database-touching method is a coroutine. Image decoding and
+signature generation run in a worker thread via ``asyncio.to_thread``, so the
+event loop is never blocked. Use these when embedding image-match in async
+services such as FastAPI:
+
+.. code-block:: python
+
+    from image_match.elasticsearch_async_driver import AsyncSignatureES
+    from elasticsearch import AsyncElasticsearch
+
+    ses = AsyncSignatureES(AsyncElasticsearch("http://localhost:9200"))
+
+    # in an async endpoint / handler:
+    await ses.add_image("cat.jpg", refresh_after=True)
+    matches = await ses.search_image("cat.jpg")
+
+    # don't forget to close the client on shutdown:
+    await ses.es.close()
+
+The async drivers expose the same API — ``add_image``, ``search_image``,
+``search_single_record``, ``insert_single_record`` and ``delete_duplicates`` —
+plus the same constructor options (``index``, ``timeout``, ``size``,
+``delete_duplicates_limit``). For OpenSearch, swap in
+``AsyncSignatureOpenSearch`` with an ``AsyncOpenSearch`` client. MongoDB has no
+async driver; wrap the sync driver in ``asyncio.to_thread`` instead if needed.
 
 MongoDB
 -------
