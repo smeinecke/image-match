@@ -32,31 +32,31 @@ class SignatureDatabaseBase:
             rec (dict): an image record. Will be in the format returned by
                 make_record
 
-                For example, rec could have the form:
+                For example, rec could have the form::
 
-                {'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg',
-                 'signature': [0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 0, 2, 2, 2, 2, 0 ... ]
-                 'simple_word_0': 42252475,
-                 'simple_word_1': 23885671,
-                 'simple_word_10': 9967839,
-                 'simple_word_11': 4257902,
-                 'simple_word_12': 28651959,
-                 'simple_word_13': 33773597,
-                 'simple_word_14': 39331441,
-                 'simple_word_15': 39327300,
-                 'simple_word_16': 11337345,
-                 'simple_word_17': 9571961,
-                 'simple_word_18': 28697868,
-                 'simple_word_19': 14834907,
-                 'simple_word_2': 7434746,
-                 'simple_word_20': 37985525,
-                 'simple_word_21': 10753207,
-                 'simple_word_22': 9566120,
-                 ...
-                 'metadata': {'category': 'art'},
-                 }
+                    {'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg',
+                     'signature': [0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 0, 2, 2, 2, 2, 0 ... ]
+                     'simple_word_0': 42252475,
+                     'simple_word_1': 23885671,
+                     'simple_word_10': 9967839,
+                     'simple_word_11': 4257902,
+                     'simple_word_12': 28651959,
+                     'simple_word_13': 33773597,
+                     'simple_word_14': 39331441,
+                     'simple_word_15': 39327300,
+                     'simple_word_16': 11337345,
+                     'simple_word_17': 9571961,
+                     'simple_word_18': 28697868,
+                     'simple_word_19': 14834907,
+                     'simple_word_2': 7434746,
+                     'simple_word_20': 37985525,
+                     'simple_word_21': 10753207,
+                     'simple_word_22': 9566120,
+                     ...
+                     'metadata': {'category': 'art'},
+                     }
 
-                 The number of simple words corresponds to the attribute N
+                The number of simple words corresponds to the attribute N
 
             pre_filter (dict): a filter to be applied by the concrete implementation
                    before applying the matching strategy
@@ -67,20 +67,20 @@ class SignatureDatabaseBase:
         Returns:
             a formatted list of dicts representing matches.
 
-            For example, if three matches are found:
+            For example, if three matches are found::
 
-            [
-             {'dist': 0.069116439263706961,
-              'id': 'AVM37oZq0osmmAxpPvx7',
-              'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg'},
-             {'dist': 0.22484320805049718,
-              'id': 'AVM37nMg0osmmAxpPvx6',
-              'path': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg'},
-             {'dist': 0.42529792112113302,
-              'id': 'AVM37p530osmmAxpPvx9',
-              'metadata': {...},
-              'path': 'https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg'}
-            ]
+                [
+                 {'dist': 0.069116439263706961,
+                  'id': 'AVM37oZq0osmmAxpPvx7',
+                  'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg'},
+                 {'dist': 0.22484320805049718,
+                  'id': 'AVM37nMg0osmmAxpPvx6',
+                  'path': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg'},
+                 {'dist': 0.42529792112113302,
+                  'id': 'AVM37p530osmmAxpPvx9',
+                  'metadata': {...},
+                  'path': 'https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg'}
+                ]
 
             You can return any fields you like, but must include at least dist and id. Duplicate entries are ok,
             and they do not need to be sorted
@@ -97,31 +97,31 @@ class SignatureDatabaseBase:
             rec (dict): an image record. Will be in the format returned by
                 make_record
 
-                For example, rec could have the form:
+                For example, rec could have the form::
 
-                {'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg',
-                 'signature': [0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 0, 2, 2, 2, 2, 0 ... ]
-                 'simple_word_0': 42252475,
-                 'simple_word_1': 23885671,
-                 'simple_word_10': 9967839,
-                 'simple_word_11': 4257902,
-                 'simple_word_12': 28651959,
-                 'simple_word_13': 33773597,
-                 'simple_word_14': 39331441,
-                 'simple_word_15': 39327300,
-                 'simple_word_16': 11337345,
-                 'simple_word_17': 9571961,
-                 'simple_word_18': 28697868,
-                 'simple_word_19': 14834907,
-                 'simple_word_2': 7434746,
-                 'simple_word_20': 37985525,
-                 'simple_word_21': 10753207,
-                 'simple_word_22': 9566120,
-                 ...
-                 'metadata': {...}
-                 }
+                    {'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg',
+                     'signature': [0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 0, 2, 2, 2, 2, 0 ... ]
+                     'simple_word_0': 42252475,
+                     'simple_word_1': 23885671,
+                     'simple_word_10': 9967839,
+                     'simple_word_11': 4257902,
+                     'simple_word_12': 28651959,
+                     'simple_word_13': 33773597,
+                     'simple_word_14': 39331441,
+                     'simple_word_15': 39327300,
+                     'simple_word_16': 11337345,
+                     'simple_word_17': 9571961,
+                     'simple_word_18': 28697868,
+                     'simple_word_19': 14834907,
+                     'simple_word_2': 7434746,
+                     'simple_word_20': 37985525,
+                     'simple_word_21': 10753207,
+                     'simple_word_22': 9566120,
+                     ...
+                     'metadata': {...}
+                     }
 
-                 The number of simple words corresponds to the attribute N
+                The number of simple words corresponds to the attribute N
 
         """
         raise NotImplementedError
@@ -259,19 +259,19 @@ class SignatureDatabaseBase:
         Returns:
             a formatted list of dicts representing unique matches, sorted by dist
 
-            For example, if three matches are found:
+            For example, if three matches are found::
 
-            [
-             {'dist': 0.069116439263706961,
-              'id': 'AVM37oZq0osmmAxpPvx7',
-              'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg'},
-             {'dist': 0.22484320805049718,
-              'id': 'AVM37nMg0osmmAxpPvx6',
-              'path': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg'},
-             {'dist': 0.42529792112113302,
-              'id': 'AVM37p530osmmAxpPvx9',
-              'path': 'https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg'}
-            ]
+                [
+                 {'dist': 0.069116439263706961,
+                  'id': 'AVM37oZq0osmmAxpPvx7',
+                  'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg'},
+                 {'dist': 0.22484320805049718,
+                  'id': 'AVM37nMg0osmmAxpPvx6',
+                  'path': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg'},
+                 {'dist': 0.42529792112113302,
+                  'id': 'AVM37p530osmmAxpPvx9',
+                  'path': 'https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg'}
+                ]
 
         """
         records = self._orientation_records(path, all_orientations=all_orientations, bytestream=bytestream)
