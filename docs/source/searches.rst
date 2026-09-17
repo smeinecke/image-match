@@ -2,9 +2,7 @@ Storing and searching the Signatures
 ====================================
 In addition to generating image signatures, ``image_match`` also facilitates
 storing and efficient lookup of images—even for up to (at least) a billion
-images.  Instagram account only has a few million images? Don't worry, you can
-get 80M images `here <http://horatio.cs.nyu.edu/mit/tiny/data/index.html>`_ to
-play with.
+images.
 
 A signature database wraps an Elasticsearch index, so you'll need Elasticsearch
 up and running. Once that's done, you can set it up like so:
