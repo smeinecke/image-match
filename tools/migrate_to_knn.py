@@ -146,28 +146,67 @@ def verify_index(client: Any, index: str, dimension: int, sample_size: int = 100
 
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point."""
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--source-url", required=True, help="e.g. http://localhost:9200")
-    parser.add_argument("--source-index", required=True)
-    parser.add_argument("--source-type", choices=["auto", "es", "os"], default="auto", help="default: auto-detect via cluster info")
-    parser.add_argument("--target-url", required=True, help="e.g. http://localhost:9201 (OpenSearch)")
-    parser.add_argument("--target-index", required=True)
-    parser.add_argument("--dimension", type=int, default=648, help="signature length (648 for default n_grid=9)")
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--source-url",
+        required=True,
+        help="e.g. http://localhost:9200",
+    )
+    parser.add_argument(
+        "--source-index",
+        required=True,
+    )
+    parser.add_argument(
+        "--source-type",
+        choices=["auto", "es", "os"],
+        default="auto",
+        help="default: auto-detect via cluster info",
+    )
+    parser.add_argument(
+        "--target-url",
+        required=True,
+        help="e.g. http://localhost:9201 (OpenSearch)",
+    )
+    parser.add_argument(
+        "--target-index",
+        required=True,
+    )
+    parser.add_argument(
+        "--dimension",
+        type=int,
+        default=648,
+        help="signature length (648 for default n_grid=9)",
+    )
     parser.add_argument(
         "--engine",
         default="lucene",
         choices=["lucene", "faiss", "nmslib"],
         help="knn engine (default lucene); nmslib is not available on OpenSearch 3+ targets",
     )
-    parser.add_argument("--space-type", default="l2", help="l2, cosinesimil, innerproduct, hamming (engine-dependent)")
+    parser.add_argument(
+        "--space-type",
+        default="l2",
+        help="l2, cosinesimil, innerproduct, hamming (engine-dependent)",
+    )
     parser.add_argument(
         "--data-type",
         default="float",
         choices=["float", "byte"],
         help="knn_vector data type; 'byte' stores int8 signatures losslessly at 4x smaller footprint",
     )
-    parser.add_argument("--batch-size", type=int, default=500)
-    parser.add_argument("--delete-source", action="store_true", help="delete the source index after successful verification")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=500,
+    )
+    parser.add_argument(
+        "--delete-source",
+        action="store_true",
+        help="delete the source index after successful verification",
+    )
     args = parser.parse_args(argv)
 
     # build the source client, auto-detecting the server type if requested

@@ -1,6 +1,6 @@
 # Makefile
 
-.PHONY: all format check validate test test-cov test-integration test-all db-up db-down test-integration-local vulture complexity xenon bandit pyright docs fix reformat-ruff fix-ruff
+.PHONY: all format check validate test test-cov test-integration test-all db-up db-down test-integration-local vulture complexity xenon bandit pyright docs fix reformat-ruff fix-ruff mutation
 
 # Default target: runs format and check
 all: validate test
@@ -60,7 +60,7 @@ test-integration-local: db-up
 	uv run pytest tests -v -m integration --timeout=120; status=$$?; $(MAKE) db-down; exit $$status
 
 vulture:
-	uv run vulture . --exclude .venv,tests,docs --make-whitelist
+	uv run vulture . --exclude .venv,tests,docs,mutants --make-whitelist
 
 complexity:
 	uv run radon cc . -a -nc
@@ -76,6 +76,10 @@ pyright:
 
 docs:
 	uv run --extra docs sphinx-build -W -b html docs/source docs/build
+
+# Mutation testing (mutmut). Runs the non-integration suite per mutant.
+mutation:
+	uv run mutmut run && uv run mutmut results
 
 # Validate the code (format + check)
 validate: format check complexity bandit pyright vulture

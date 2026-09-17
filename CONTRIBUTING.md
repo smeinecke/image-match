@@ -32,6 +32,20 @@ which exercises real transport failures (proxy kill, latency, connection resets)
 between the drivers and OpenSearch. `make db-up` starts the toxiproxy service
 alongside the databases.
 
+## Mutation testing
+
+`mutmut` runs the non-integration suite against generated mutants. It is
+deliberately not part of PR validation (a full run takes a while) — it runs
+weekly and on demand via the `mutation` workflow, or locally with:
+
+```bash
+make mutation
+```
+
+Lines that can never change behaviour (CLI help text, `print` reporting, the
+vestigial `handle_mpo` parameter, `typing.cast`) are excluded via
+`do_not_mutate_patterns` in `pyproject.toml`.
+
 ## Pull requests
 
 - Keep changes in logically grouped commits.

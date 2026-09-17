@@ -5,27 +5,16 @@ into a hybrid k-NN index, then verifies both the classic word driver and the
 new knn driver can search the migrated index.
 """
 
-import importlib.util
 from contextlib import suppress
-from pathlib import Path
 
 import pytest
+import tools.migrate_to_knn as migrate_tool
 
 from .helpers import MAPPINGS, make_backend, random_index_name, wait_until_ready
 
 pytestmark = pytest.mark.integration
 
 DIMENSION = 648
-
-
-def _load_tool():
-    spec = importlib.util.spec_from_file_location("migrate_to_knn", Path(__file__).parent.parent / "tools" / "migrate_to_knn.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-migrate_tool = _load_tool()
 
 
 @pytest.fixture

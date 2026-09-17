@@ -168,7 +168,11 @@ class ImageSignature:
 
         """
         # Step 1:    Load image as array of grey-levels
-        im_array = self.preprocess_image(path_or_image, handle_mpo=self.handle_mpo, bytestream=bytestream)
+        im_array = self.preprocess_image(
+            path_or_image,
+            bytestream=bytestream,
+            handle_mpo=self.handle_mpo,
+        )
 
         # Step 2a:   Determine cropping boundaries
         if self.crop_percentiles is not None:
@@ -194,7 +198,11 @@ class ImageSignature:
         return np.ravel(diff_mat).astype("int8")
 
     @staticmethod
-    def preprocess_image(image_or_path: ImageInput, bytestream: bool = False, handle_mpo: bool = False) -> np.ndarray:
+    def preprocess_image(
+        image_or_path: ImageInput,
+        bytestream: bool = False,
+        handle_mpo: bool = False,
+    ) -> np.ndarray:
         """Loads an image and converts to greyscale.
 
         Corresponds to 'step 1' in Goldberg's paper

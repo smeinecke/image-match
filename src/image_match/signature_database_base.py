@@ -292,7 +292,11 @@ class SignatureDatabaseBase:
         Pure CPU work (image decode + signature generation); async drivers run
         this in a worker thread.
         """
-        img = self.gis.preprocess_image(path, bytestream=bytestream, handle_mpo=self.gis.handle_mpo)
+        img = self.gis.preprocess_image(
+            path,
+            bytestream=bytestream,
+            handle_mpo=self.gis.handle_mpo,
+        )
         # default to no transformations
         orientations = [None]
 

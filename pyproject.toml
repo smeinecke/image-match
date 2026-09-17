@@ -85,6 +85,7 @@ dev = [
     "pyright>=1.1.400",
     "bandit>=1.8",
     "pre-commit>=4.0",
+    "mutmut>=3.8.0",
 ]
 
 [tool.hatch.version]
@@ -141,7 +142,7 @@ reportUnknownArgumentType = false
 reportUnknownLambdaType = false
 reportMissingTypeStubs = false
 reportPrivateUsage = false
-exclude = ["**/__pycache__", "**/dist", "**/build", "**/venv", "**/.venv", "tests", "docs"]
+exclude = ["**/__pycache__", "**/dist", "**/build", "**/venv", "**/.venv", "tests", "docs", "mutants"]
 
 [tool.bandit]
 exclude_dirs = [".venv", "tests"]
@@ -149,7 +150,37 @@ exclude_dirs = [".venv", "tests"]
 skips = ["B101"]
 
 [tool.vulture]
-exclude = ["dist", "build", "venv", ".venv", "tests", "docs"]
+exclude = ["dist", "build", "venv", ".venv", "tests", "docs", "mutants"]
 min_confidence = 80
 paths = ["."]
 sort_by_size = true
+
+[tool.mutmut]
+source_paths = ["src/image_match/", "tools/migrate_to_knn.py"]
+pytest_add_cli_args_test_selection = ["tests/", "-m", "not integration"]
+mutate_only_covered_lines = true
+# Lines whose mutations can never change behaviour:
+#  - handle_mpo: vestigial API-compat parameter, accepted but unused
+#  - help=/description=/formatter_class: argparse metadata text
+#  - bare print(...) lines: CLI progress reporting
+#  - cast(...): typing.cast is a runtime no-op
+#  - rec.pop("path"/"metadata", ...): dead defensive code — only simple_word_*
+#    keys enter the query's should-clause anyway
+#  - 'if png else': falsy png -> Image.open raises -> same CorruptImageError path
+#  - asarray(img, dtype=np.uint8): PIL image is already uint8 after convert("RGB")
+#  - norm(vec, axis=0): vec is guaranteed 1-D so every axis mutation is a no-op
+do_not_mutate_patterns = [
+    'handle_mpo',
+    'help=',
+    'description=',
+    'formatter_class',
+    '^\s*print\(',
+    'cast\(',
+    'pop\("path"',
+    'pop\("metadata"',
+    'if png else',
+    'asarray\(img',
+    'norm\(vec, axis=0\)',
+]
+# conftest stages test images from the committed docs images
+also_copy = ["docs/source/_images/"]

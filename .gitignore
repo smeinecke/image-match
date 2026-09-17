@@ -44,6 +44,9 @@ htmlcov/
 nosetests.xml
 coverage.xml
 
+# Mutation testing
+mutants/
+
 # Translations
 *.mo
 *.pot
