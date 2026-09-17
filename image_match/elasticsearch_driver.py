@@ -1,16 +1,14 @@
-from .signature_database_base import SignatureDatabaseBase
-from .signature_database_base import normalized_distance
 from datetime import datetime
+
 import numpy as np
-from collections import deque
+
+from .signature_database_base import SignatureDatabaseBase, normalized_distance
 
 
 class SignatureES(SignatureDatabaseBase):
-    """Elasticsearch driver for image-match
-    """
+    """Elasticsearch driver for image-match"""
 
-    def __init__(self, es, index='images', timeout='10s', size=100,
-                 *args, **kwargs):
+    def __init__(self, es, index="images", timeout="10s", size=100, *args, **kwargs):
         """Extra setup for Elasticsearch
 
         Args:
@@ -44,64 +42,73 @@ class SignatureES(SignatureDatabaseBase):
         super(SignatureES, self).__init__(*args, **kwargs)
 
     def search_single_record(self, rec, pre_filter=None):
-        path = rec.pop('path')
-        signature = rec.pop('signature')
-        if 'metadata' in rec:
-            rec.pop('metadata')
+        """Search for a matching image record.
+
+        Args:
+            rec (dict): an image record in the format returned by make_record
+            pre_filter (Optional[dict]): an Elasticsearch filter clause applied
+                before matching (default None)
+
+        Returns:
+            a list of dicts representing matches, filtered by distance_cutoff
+
+        """
+        rec.pop("path")
+        signature = rec.pop("signature")
+        if "metadata" in rec:
+            rec.pop("metadata")
 
         # build the 'should' list
-        should = [{'term': { word: rec[word]}} for word in rec]
-        body = {
-            'query': {
-                   'bool': {'should': should}
-            },
-            '_source': {'excludes': ['simple_word_*']}
-        }
+        should = [{"term": {word: rec[word]}} for word in rec]
+        body = {"query": {"bool": {"should": should}}, "_source": {"excludes": ["simple_word_*"]}}
 
         if pre_filter is not None:
-            body['query']['bool']['filter'] = pre_filter
+            body["query"]["bool"]["filter"] = pre_filter
 
-        res = self.es.search(index=self.index,
-                              body=body,
-                              size=self.size,
-                              timeout=self.timeout)['hits']['hits']
+        res = self.es.search(index=self.index, body=body, size=self.size, timeout=self.timeout)["hits"]["hits"]
 
-        sigs = np.array([x['_source']['signature'] for x in res])
+        sigs = np.array([x["_source"]["signature"] for x in res])
 
         if sigs.size == 0:
             return []
 
         dists = normalized_distance(sigs, np.array(signature))
 
-        formatted_res = [{'id': x['_id'],
-                          'score': x['_score'],
-                          'metadata': x['_source'].get('metadata'),
-                          'path': x['_source'].get('url', x['_source'].get('path'))}
-                         for x in res]
+        formatted_res = [
+            {"id": x["_id"], "score": x["_score"], "metadata": x["_source"].get("metadata"), "path": x["_source"].get("url", x["_source"].get("path"))}
+            for x in res
+        ]
 
         for i, row in enumerate(formatted_res):
-            row['dist'] = dists[i]
-        formatted_res = filter(lambda y: y['dist'] < self.distance_cutoff, formatted_res)
+            row["dist"] = dists[i]
+        formatted_res = filter(lambda y: y["dist"] < self.distance_cutoff, formatted_res)
 
         return formatted_res
 
     def insert_single_record(self, rec, refresh_after=False):
-        rec['timestamp'] = datetime.now()
+        """Insert an image record.
+
+        Args:
+            rec (dict): an image record in the format returned by make_record
+            refresh_after (Optional[boolean]): refresh the index after inserting,
+                making the record searchable immediately (default False)
+
+        """
+        rec["timestamp"] = datetime.now()
         self.es.index(index=self.index, body=rec, refresh=refresh_after)
 
     def delete_duplicates(self, path):
         """Delete all but one entries in elasticsearch whose `path` value is equivalent to that of path.
+
         Args:
             path (string): path value to compare to those in the elastic search
+
         """
-        matching_paths = [item['_id'] for item in
-                          self.es.search(body={'query':
-                                               {'match':
-                                                {'path': path}
-                                               }
-                                              },
-                                         index=self.index)['hits']['hits']
-                          if item['_source']['path'] == path]
+        matching_paths = [
+            item["_id"]
+            for item in self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, size=10000)["hits"]["hits"]
+            if item["_source"]["path"] == path
+        ]
 
         if matching_paths:
             for id_tag in matching_paths[1:]:

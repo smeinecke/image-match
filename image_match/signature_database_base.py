@@ -1,7 +1,9 @@
-from image_match.goldberg import ImageSignature
 from itertools import product
 from operator import itemgetter
+
 import numpy as np
+
+from image_match.goldberg import ImageSignature
 
 
 class SignatureDatabaseBase(object):
@@ -116,9 +118,7 @@ class SignatureDatabaseBase(object):
         """
         raise NotImplementedError
 
-    def __init__(self, k=16, N=63, n_grid=9,
-                 crop_percentile=(5, 95), distance_cutoff=0.45,
-                 *signature_args, **signature_kwargs):
+    def __init__(self, k=16, N=63, n_grid=9, crop_percentile=(5, 95), distance_cutoff=0.45, *signature_args, **signature_kwargs):
         """Set up storage scheme for images
 
         Central to the speed of this approach is the transforming the image
@@ -155,7 +155,7 @@ class SignatureDatabaseBase(object):
             N (Optional[int]): the number of words (default 63)
             n_grid (Optional[int]): the n_grid x n_grid size to use in determining
                 the image signature (default 9)
-            crop_percentiles (Optional[Tuple[int]]): lower and upper bounds when
+            crop_percentile (Optional[Tuple[int]]): lower and upper bounds when
                 considering how much variance to keep in the image (default (5, 95))
             distance_cutoff (Optional [float]): maximum image signature distance to
                 be considered a match (default 0.45)
@@ -165,23 +165,23 @@ class SignatureDatabaseBase(object):
         """
         # Check integer inputs
         if type(k) is not int:
-            raise TypeError('k should be an integer')
+            raise TypeError("k should be an integer")
         if type(N) is not int:
-            raise TypeError('N should be an integer')
+            raise TypeError("N should be an integer")
         if type(n_grid) is not int:
-            raise TypeError('n_grid should be an integer')
+            raise TypeError("n_grid should be an integer")
 
         self.k = k
         self.N = N
         self.n_grid = n_grid
 
         # Check float input
-        if type(distance_cutoff) is not float:
-            raise TypeError('distance_cutoff should be a float')
-        if distance_cutoff < 0.:
-            raise ValueError('distance_cutoff should be > 0 (got %r)' % distance_cutoff)
+        if not isinstance(distance_cutoff, (int, float)):
+            raise TypeError("distance_cutoff should be a float")
+        if distance_cutoff < 0.0:
+            raise ValueError("distance_cutoff should be > 0 (got %r)" % distance_cutoff)
 
-        self.distance_cutoff = distance_cutoff
+        self.distance_cutoff = float(distance_cutoff)
 
         self.crop_percentile = crop_percentile
 
@@ -203,12 +203,14 @@ class SignatureDatabaseBase(object):
                 is as described in the explanation for the img argument
                 (default False)
             metadata (Optional): any other information you want to include, can be nested (default None)
+            *args: Variable length argument list to pass to insert_single_record
+            **kwargs: Arbitrary keyword arguments to pass to insert_single_record
 
         """
         rec = make_record(path, self.gis, self.k, self.N, img=img, bytestream=bytestream, metadata=metadata)
         self.insert_single_record(rec, *args, **kwargs)
 
-    def search_image(self, path, all_orientations=False, bytestream=False, pre_filter=None):
+    def search_image(self, path, all_orientations=False, bytestream=False, pre_filter=None, **kwargs):
         """Search for matches
 
         Args:
@@ -221,6 +223,9 @@ class SignatureDatabaseBase(object):
                 (default False)
             pre_filter (Optional[dict]): filters list before applying the matching algorithm
                 (default None)
+            **kwargs: Arbitrary keyword arguments to pass to search_single_record
+                (e.g. n_parallel_words for the MongoDB driver)
+
         Returns:
             a formatted list of dicts representing unique matches, sorted by dist
 
@@ -239,7 +244,7 @@ class SignatureDatabaseBase(object):
             ]
 
         """
-        img = self.gis.preprocess_image(path, bytestream)
+        img = self.gis.preprocess_image(path, bytestream=bytestream, handle_mpo=self.gis.handle_mpo)
         # default to no transformations
         orientations = [None]
 
@@ -250,10 +255,7 @@ class SignatureDatabaseBase(object):
             mirrors = [lambda x: x, np.fliplr]
 
             # an ugly solution for function composition
-            rotations = [None,
-                         np.rot90,
-                         lambda x: np.rot90(x, 2),
-                         lambda x: np.rot90(x, 3)]
+            rotations = [None, np.rot90, lambda x: np.rot90(x, 2), lambda x: np.rot90(x, 3)]
 
             # cartesian product of all possible orientations
             orientations = product(inversions, rotations, mirrors)
@@ -262,24 +264,27 @@ class SignatureDatabaseBase(object):
         # this will only take one iteration
         result = []
 
-        orientations = set(np.ravel(list(orientations)))
         for transform in orientations:
             # compose all functions (if not None) and apply on signature
-            transformed_img = img if transform is None else transform(img)
+            transformed_img = img
+            if transform is not None:
+                for f in transform:
+                    if f is not None:
+                        transformed_img = f(transformed_img)
 
             # generate the signature
             transformed_record = make_record(transformed_img, self.gis, self.k, self.N)
 
-            result.extend(self.search_single_record(transformed_record, pre_filter=pre_filter))
+            result.extend(self.search_single_record(transformed_record, pre_filter=pre_filter, **kwargs))
 
         ids = set()
         unique = []
         for item in result:
-            if item['id'] not in ids:
+            if item["id"] not in ids:
                 unique.append(item)
-                ids.add(item['id'])
+                ids.add(item["id"])
 
-        return sorted(unique, key=itemgetter('dist'))
+        return sorted(unique, key=itemgetter("dist"))
 
 
 def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
@@ -336,17 +341,17 @@ def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
          }
 
     """
-    record = {'path': path}
+    record = {"path": path}
 
     if img is not None:
         signature = gis.generate_signature(img, bytestream=bytestream)
     else:
         signature = gis.generate_signature(path)
 
-    record['signature'] = signature.tolist()
+    record["signature"] = signature.tolist()
 
     if metadata:
-        record['metadata'] = metadata
+        record["metadata"] = metadata
 
     words = get_words(signature, k, N)
     max_contrast(words)
@@ -354,7 +359,7 @@ def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
     words = words_to_int(words)
 
     for i in range(N):
-        record[''.join(['simple_word_', str(i)])] = words[i].tolist()
+        record["".join(["simple_word_", str(i)])] = words[i].tolist()
 
     return record
 
@@ -383,21 +388,20 @@ def get_words(array, k, N):
 
     """
     # generate starting positions of each word
-    word_positions = np.linspace(0, array.shape[0],
-                                 N, endpoint=False).astype('int')
+    word_positions = np.linspace(0, array.shape[0], N, endpoint=False).astype("int")
 
     # check that inputs make sense
     if k > array.shape[0]:
-        raise ValueError('Word length cannot be longer than array length')
+        raise ValueError("Word length cannot be longer than array length")
     if word_positions.shape[0] > array.shape[0]:
-        raise ValueError('Number of words cannot be more than array length')
+        raise ValueError("Number of words cannot be more than array length")
 
     # create empty words array
-    words = np.zeros((N, k)).astype('int8')
+    words = np.zeros((N, k)).astype("int8")
 
     for i, pos in enumerate(word_positions):
         if pos + k <= array.shape[0]:
-            words[i] = array[pos:pos+k]
+            words[i] = array[pos : pos + k]
         else:
             temp = array[pos:].copy()
             temp.resize(k)
@@ -429,7 +433,7 @@ def words_to_int(word_array):
     width = word_array.shape[1]
 
     # Three states (-1, 0, 1)
-    coding_vector = 3**np.arange(width)
+    coding_vector = 3 ** np.arange(width)
 
     # The 'plus one' here makes all digits positive, so that the
     # integer representation is strictly non-negative and unique
@@ -443,6 +447,7 @@ def max_contrast(array):
 
     Args:
         array (numpy.ndarray): target array
+
     """
     array[array > 0] = 1
     array[array < 0] = -1
@@ -463,6 +468,7 @@ def normalized_distance(_target_array, _vec, nan_value=1.0):
 
     Returns:
         the normalized distance (float)
+
     """
     target_array = _target_array.astype(int)
     vec = _vec.astype(int)
