@@ -19,7 +19,7 @@ For more explanation, see [this issue](https://github.com/edjo-labs/image-match/
 
 Based on the paper [_An image signature for any kind of image_, Wong et
 al](http://www.cs.cmu.edu/~hcwong/Pdfs/icip02.ps).  There is an existing
-[reference implementation](https://www.pureftpd.org/project/libpuzzle) which
+[reference implementation](https://github.com/jedisct1/libpuzzle) which
 may be more suited to your needs.
 
 The folks over at [Pavlov](https://usepavlov.com/) have released an excellent

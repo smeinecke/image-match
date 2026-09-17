@@ -8,7 +8,7 @@ supports sustained high rates of image insertion: up to 10,000 images/s on our
 cluster!
 
 Based on the paper `An image signature for any kind of image, Wong et al`_
-There is an existing `reference implementation <https://www.pureftpd.org/project/libpuzzle>`_ which may be more suited to your needs.
+There is an existing `reference implementation <https://github.com/jedisct1/libpuzzle>`_ which may be more suited to your needs.
 
 The folks over at `Pavlov <https://pavlovml.com/>`_ have released an excellent
 `containerized version of image-match <https://github.com/pavlovml/match>`_ for
