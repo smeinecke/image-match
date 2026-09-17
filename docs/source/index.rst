@@ -23,6 +23,7 @@ Contents
     :maxdepth: 2
     
     start
+    quickstart
     signatures
     searches
     backends
