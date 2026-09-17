@@ -1241,7 +1241,7 @@ def test_knn_insert_delete_and_path_hits_call_args():
     call = client.search.call_args
     assert call.kwargs["body"] == {"query": {"match": {"path": "p"}}}
     assert call.kwargs["index"] == "images"
-    assert call.kwargs["params"] == {"size": 10000}
+    assert call.kwargs["size"] == 10000
     client.delete.assert_called_once_with(index="images", id="b")
 
 

@@ -123,9 +123,7 @@ class SignatureES(SignatureDatabaseBase):
         if limit is None:
             limit = self.delete_duplicates_limit
 
-        matching_paths = [item["_id"] for item in self._path_hits(path, limit) if item["_source"].get("path") == path]
-
-        for id_tag in matching_paths[1:]:
+        for id_tag in duplicate_ids(self._path_hits(path, limit), path):
             self.es.delete(index=self.index, id=id_tag)
 
     def _path_hits(self, path: str, limit: int) -> list[dict[str, Any]]:
@@ -172,6 +170,15 @@ def build_word_query(
         body["query"] = {"bool": word_bool}
 
     return body
+
+
+def duplicate_ids(hits: list[dict[str, Any]], path: str) -> list[Any]:
+    """Return _ids of hits whose stored path exactly equals `path`, minus the first.
+
+    Fuzzy `match` on path returns near-misses; delete_duplicates keeps the
+    first exact hit and deletes the rest.
+    """
+    return [item["_id"] for item in hits if item["_source"].get("path") == path][1:]
 
 
 def format_hits(hits: list[dict[str, Any]], signature: np.ndarray, distance_cutoff: float) -> list[dict[str, Any]]:

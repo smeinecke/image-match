@@ -22,6 +22,30 @@ def _parse_duration(timeout: str) -> float:
     return float(s)
 
 
+def _search_params(timeout: str, size: int | None = None) -> dict[str, Any]:
+    """Build the params dict for an opensearch-py search call.
+
+    opensearch-py reserves the 'timeout'/'request_timeout' kwargs for the
+    HTTP request timeout, so the ES-style query-level duration string is
+    mapped to a numeric request_timeout instead. 'size' likewise goes
+    through params.
+    """
+    params: dict[str, Any] = {"request_timeout": _parse_duration(timeout)}
+    if size is not None:
+        params["size"] = size
+    return params
+
+
+def _index_kwargs(index: str, rec: dict[str, Any], refresh_after: bool) -> dict[str, Any]:
+    """Build the kwargs for an opensearch-py index() call (sync or async client).
+
+    opensearch-py's index() still takes a 'body' parameter, and refresh is a
+    params string rather than a bool.
+    """
+    rec["timestamp"] = datetime.now()
+    return {"index": index, "body": rec, "params": {"refresh": "true" if refresh_after else "false"}}
+
+
 class SignatureOpenSearch(SignatureES):
     """OpenSearch driver for image-match.
 
@@ -98,13 +122,10 @@ class SignatureOpenSearch(SignatureES):
 
     @override
     def _search(self, body: dict[str, Any]) -> Any:
-        # opensearch-py reserves the 'timeout'/'request_timeout' params for the
-        # HTTP request timeout, so the ES-style query-level timeout string can't
-        # be sent; map it to a numeric request timeout instead
         return cast("OpenSearch", self.es).search(
             index=self.index,
             body=body,
-            params={"size": self.size, "request_timeout": _parse_duration(self.timeout)},
+            params=_search_params(self.timeout, self.size),
         )
 
     @override
@@ -117,5 +138,4 @@ class SignatureOpenSearch(SignatureES):
                 making the record searchable immediately (default False)
 
         """
-        rec["timestamp"] = datetime.now()
-        cast("OpenSearch", self.es).index(index=self.index, body=rec, params={"refresh": "true" if refresh_after else "false"})
+        cast("OpenSearch", self.es).index(**_index_kwargs(self.index, rec, refresh_after))

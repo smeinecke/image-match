@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING, Any, override
 
 import numpy as np
 
-from .opensearch_driver import _parse_duration
-from .signature_database_base import PreFilter, SignatureDatabaseBase, normalized_distance
+from .elasticsearch_driver import format_hits
+from .opensearch_driver import SignatureOpenSearch, _search_params
+from .signature_database_base import PreFilter, SignatureDatabaseBase
 
 if TYPE_CHECKING:
     from opensearchpy import OpenSearch
@@ -49,7 +49,7 @@ def knn_index_body(dimension: int, engine: str = "lucene", space_type: str = "l2
     }
 
 
-class SignatureOpenSearchKNN(SignatureDatabaseBase):
+class SignatureOpenSearchKNN(SignatureOpenSearch):
     """OpenSearch k-NN driver for image-match.
 
     Stores the same record format as the word drivers, but searches with an
@@ -102,13 +102,16 @@ class SignatureOpenSearchKNN(SignatureDatabaseBase):
             **kwargs (Optional): Arbitrary keyword arguments to pass to base constructor
 
         """
+        # SignatureOpenSearch's ctor would bind positional *args to
+        # minimum_should_match; call the base directly so they reach the
+        # signature parameters (k, N, ...) as with the other drivers
         self.es = es
         self.index = index
         self.timeout = timeout
         self.size = size
         self.delete_duplicates_limit = delete_duplicates_limit
 
-        super().__init__(*args, **kwargs)
+        SignatureDatabaseBase.__init__(self, *args, **kwargs)
 
     @override
     def search_single_record(self, rec: dict[str, Any], pre_filter: PreFilter = None) -> list[dict[str, Any]]:
@@ -130,42 +133,10 @@ class SignatureOpenSearchKNN(SignatureDatabaseBase):
 
         return format_knn_hits(hits, np.array(signature), self.distance_cutoff)
 
-    def _search(self, body: dict[str, Any]) -> Any:
-        return self.es.search(index=self.index, body=body, params={"request_timeout": _parse_duration(self.timeout)})
-
     @override
-    def insert_single_record(self, rec: dict[str, Any], refresh_after: bool = False) -> None:
-        """Insert an image record.
-
-        Args:
-            rec (dict): an image record in the format returned by make_record
-            refresh_after (Optional[boolean]): refresh the index after inserting,
-                making the record searchable immediately (default False)
-
-        """
-        rec["timestamp"] = datetime.now()
-        self.es.index(index=self.index, body=rec, params={"refresh": "true" if refresh_after else "false"})
-
-    def delete_duplicates(self, path: str, limit: int | None = None) -> None:
-        """Delete all but one entries in the index whose `path` value is equivalent to that of path.
-
-        Args:
-            path (string): path value to compare to those in the index
-            limit (Optional[int]): maximum number of duplicate candidates to scan;
-                defaults to the instance's delete_duplicates_limit (default 10000)
-
-        """
-        if limit is None:
-            limit = self.delete_duplicates_limit
-
-        matching_paths = [item["_id"] for item in self._path_hits(path, limit) if item["_source"].get("path") == path]
-
-        for id_tag in matching_paths[1:]:
-            self.es.delete(index=self.index, id=id_tag)
-
-    def _path_hits(self, path: str, limit: int) -> list[dict[str, Any]]:
-        """Search for documents whose path field fuzzy-matches `path`."""
-        return self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, params={"size": limit})["hits"]["hits"]
+    def _search(self, body: dict[str, Any]) -> Any:
+        # the knn query carries its own size in the body (k candidates)
+        return self.es.search(index=self.index, body=body, params=_search_params(self.timeout))
 
 
 def build_knn_query(signature: Any, k: int, pre_filter: PreFilter = None) -> dict[str, Any]:
@@ -190,19 +161,9 @@ def build_knn_query(signature: Any, k: int, pre_filter: PreFilter = None) -> dic
 
 
 def format_knn_hits(hits: list[dict[str, Any]], signature: np.ndarray, distance_cutoff: float) -> list[dict[str, Any]]:
-    """Rescore knn candidates with normalized_distance and filter by cutoff."""
-    sigs = np.array([x["_source"]["signature"] for x in hits])
+    """Rescore knn candidates with normalized_distance and filter by cutoff.
 
-    if sigs.size == 0:
-        return []
-
-    dists = normalized_distance(sigs, signature)
-
-    formatted_res = [
-        {"id": x["_id"], "score": x["_score"], "metadata": x["_source"].get("metadata"), "path": x["_source"].get("url", x["_source"].get("path"))}
-        for x in hits
-    ]
-
-    for i, row in enumerate(formatted_res):
-        row["dist"] = dists[i]
-    return [y for y in formatted_res if y["dist"] < distance_cutoff]
+    k-NN hits arrive in the same {_id, _score, _source} shape as word-query
+    hits, so rescoring is shared with elasticsearch_driver.format_hits.
+    """
+    return format_hits(hits, signature, distance_cutoff)

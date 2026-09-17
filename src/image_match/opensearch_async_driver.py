@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast, override
 
 from .elasticsearch_async_driver import AsyncSignatureES
-from .opensearch_driver import _parse_duration
+from .opensearch_driver import _index_kwargs, _search_params
 
 if TYPE_CHECKING:
     from elasticsearch import AsyncElasticsearch
@@ -80,13 +79,10 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
 
     @override
     async def _search(self, body: dict[str, Any]) -> Any:
-        # opensearch-py reserves the 'timeout'/'request_timeout' params for the
-        # HTTP request timeout, so the ES-style query-level timeout string can't
-        # be sent; map it to a numeric request timeout instead
         return await cast("AsyncOpenSearch", self.es).search(
             index=self.index,
             body=body,
-            params={"size": self.size, "request_timeout": _parse_duration(self.timeout)},
+            params=_search_params(self.timeout, self.size),
         )
 
     @override
@@ -99,5 +95,4 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
                 making the record searchable immediately (default False)
 
         """
-        rec["timestamp"] = datetime.now()
-        await cast("AsyncOpenSearch", self.es).index(index=self.index, body=rec, params={"refresh": "true" if refresh_after else "false"})
+        await cast("AsyncOpenSearch", self.es).index(**_index_kwargs(self.index, rec, refresh_after))

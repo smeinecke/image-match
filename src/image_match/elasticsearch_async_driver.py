@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, override
 
-from .elasticsearch_driver import build_word_query, format_hits
+from .elasticsearch_driver import build_word_query, duplicate_ids, format_hits
 from .signature_database_base import ImageInput, PreFilter, SignatureDatabaseBase, dedupe_results, make_record
 
 if TYPE_CHECKING:
@@ -186,9 +186,7 @@ class AsyncSignatureES(SignatureDatabaseBase):
         if limit is None:
             limit = self.delete_duplicates_limit
 
-        matching_paths = [item["_id"] for item in await self._path_hits(path, limit) if item["_source"].get("path") == path]
-
-        for id_tag in matching_paths[1:]:
+        for id_tag in duplicate_ids(await self._path_hits(path, limit), path):
             await self.es.delete(index=self.index, id=id_tag)
 
     async def _path_hits(self, path: str, limit: int) -> list[dict[str, Any]]:
