@@ -1,8 +1,7 @@
 import hashlib
 import os
-import shutil
+from contextlib import suppress
 from time import sleep
-from urllib.request import urlretrieve
 
 import pytest
 
@@ -14,18 +13,9 @@ from image_match.elasticsearch_driver import SignatureES
 
 pytestmark = pytest.mark.integration
 
-# the original test URLs are no longer reachable; the flickr URL still
-# resolves, and docs/source/_images holds copies of the reference images
-DOCS_IMAGES = os.path.join(os.path.dirname(__file__), "..", "docs", "source", "_images")
 test_img_url1 = "https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg"
-try:
-    # import-time download; tests that need the file fail clearly if offline
-    urlretrieve(test_img_url1, "test1.jpg")
-except OSError:
-    pass
-shutil.copy(os.path.join(DOCS_IMAGES, "MonaLisa_Wikipedia.jpg"), "test2.jpg")
 
-INDEX_NAME = "test_environment_{}".format(hashlib.md5(os.urandom(128)).hexdigest()[:12])
+INDEX_NAME = f"test_environment_{hashlib.md5(os.urandom(128)).hexdigest()[:12]}"
 MAPPINGS = {
     "mappings": {"properties": {"path": {"type": "keyword"}, "metadata": {"properties": {"tenant_id": {"type": "keyword"}, "project_id": {"type": "keyword"}}}}}
 }
@@ -48,10 +38,8 @@ def setup_index(request, index_name):
             raise
 
     def fin():
-        try:
+        with suppress(NotFoundError):
             es.indices.delete(index=index_name)
-        except NotFoundError:
-            pass
 
     request.addfinalizer(fin)
 
@@ -59,10 +47,8 @@ def setup_index(request, index_name):
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_index(request, es, index_name):
     def fin():
-        try:
+        with suppress(NotFoundError):
             es.indices.delete(index=index_name)
-        except NotFoundError:
-            pass
 
     request.addfinalizer(fin)
 
@@ -88,7 +74,7 @@ def test_elasticsearch_running(es):
             i += 1
             sleep(2)
 
-    pytest.fail("Elasticsearch not running (failed to connect after {} tries)".format(str(i)))
+    pytest.fail(f"Elasticsearch not running (failed to connect after {i!s} tries)")
 
 
 def test_lookup_with_filter_by_metadata(ses):
@@ -116,7 +102,7 @@ def test_lookup_with_filter_by_metadata(ses):
 
 
 def _metadata(tenant_id, project_id):
-    return dict(tenant_id=tenant_id, project_id=project_id)
+    return {"tenant_id": tenant_id, "project_id": project_id}
 
 
 def _nested_filter(tenant_id, project_id):

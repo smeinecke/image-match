@@ -1,8 +1,7 @@
 import hashlib
 import os
-import shutil
+from contextlib import suppress
 from time import sleep
-from urllib.request import urlretrieve
 
 import pytest
 
@@ -15,18 +14,9 @@ from image_match.opensearch_driver import SignatureOpenSearch
 
 pytestmark = pytest.mark.integration
 
-# the original test URLs are no longer reachable; the flickr URL still
-# resolves, and docs/source/_images holds copies of the reference images
-DOCS_IMAGES = os.path.join(os.path.dirname(__file__), "..", "docs", "source", "_images")
 test_img_url1 = "https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg"
-try:
-    # import-time download; tests that need the file fail clearly if offline
-    urlretrieve(test_img_url1, "test1.jpg")
-except OSError:
-    pass
-shutil.copy(os.path.join(DOCS_IMAGES, "MonaLisa_Wikipedia.jpg"), "test2.jpg")
 
-INDEX_NAME = "test_environment_{}".format(hashlib.md5(os.urandom(128)).hexdigest()[:12])
+INDEX_NAME = f"test_environment_{hashlib.md5(os.urandom(128)).hexdigest()[:12]}"
 MAPPINGS = {
     "mappings": {
         "properties": {
@@ -63,10 +53,8 @@ def setup_index(request, index_name):
             raise
 
     def fin():
-        try:
+        with suppress(NotFoundError):
             os_client.indices.delete(index=index_name)
-        except NotFoundError:
-            pass
 
     request.addfinalizer(fin)
 
@@ -92,7 +80,7 @@ def test_opensearch_running(os_client):
             i += 1
             sleep(2)
 
-    pytest.fail("OpenSearch not running (failed to connect after {} tries)".format(str(i)))
+    pytest.fail(f"OpenSearch not running (failed to connect after {i!s} tries)")
 
 
 def test_add_image_by_url(ses):
@@ -170,10 +158,10 @@ def test_add_image_with_metadata(ses):
 
 
 def test_lookup_with_filter_by_metadata(ses):
-    metadata = dict(tenant_id="foo")
+    metadata = {"tenant_id": "foo"}
     ses.add_image("test1.jpg", metadata=metadata, refresh_after=True)
 
-    metadata2 = dict(tenant_id="bar-2")
+    metadata2 = {"tenant_id": "bar-2"}
     ses.add_image("test2.jpg", metadata=metadata2, refresh_after=True)
 
     r = ses.search_image("test1.jpg", pre_filter={"term": {"metadata.tenant_id": "foo"}})

@@ -1,7 +1,3 @@
-import os
-import shutil
-from urllib.request import urlretrieve
-
 import pytest
 
 pytest.importorskip("pymongo", reason="pymongo not installed (install the 'mongo' extra)")
@@ -14,16 +10,7 @@ from image_match.mongodb_driver import SignatureMongo
 
 pytestmark = pytest.mark.integration
 
-# the original test URLs are no longer reachable; the flickr URL still
-# resolves, and docs/source/_images holds copies of the reference images
-DOCS_IMAGES = os.path.join(os.path.dirname(__file__), "..", "docs", "source", "_images")
 test_img_url1 = "https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg"
-try:
-    # import-time download; tests that need the file fail clearly if offline
-    urlretrieve(test_img_url1, "test1.jpg")
-except OSError:
-    pass
-shutil.copy(os.path.join(DOCS_IMAGES, "MonaLisa_Wikipedia.jpg"), "test2.jpg")
 
 
 @pytest.fixture
@@ -105,10 +92,10 @@ def test_add_image_with_metadata(ses):
 
 
 def test_lookup_with_filter_by_metadata(ses):
-    metadata = dict(tenant_id="foo")
+    metadata = {"tenant_id": "foo"}
     ses.add_image("test1.jpg", metadata=metadata)
 
-    metadata2 = dict(tenant_id="bar-2")
+    metadata2 = {"tenant_id": "bar-2"}
     ses.add_image("test2.jpg", metadata=metadata2)
 
     r = ses.search_image("test1.jpg", pre_filter={"metadata.tenant_id": "foo"})

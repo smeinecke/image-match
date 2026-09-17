@@ -1,23 +1,11 @@
-import os
-import shutil
-from urllib.request import urlretrieve
-
 import pytest
 from numpy import array_equal, ndarray
 
 from image_match.goldberg import CorruptImageError, ImageSignature
 
-# the original test URLs are no longer reachable; use the copies committed
-# under docs/source/_images and the one image URL that still resolves
-DOCS_IMAGES = os.path.join(os.path.dirname(__file__), "..", "docs", "source", "_images")
+# the only original test image URL that still resolves; the reference
+# images themselves are staged into the test cwd by conftest.workdir
 test_img_url = "https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg"
-try:
-    # import-time download; tests that need the file fail clearly if offline
-    urlretrieve(test_img_url, "test_url.jpg")
-except OSError:
-    pass
-shutil.copy(os.path.join(DOCS_IMAGES, "MonaLisa_Wikipedia.jpg"), "test.jpg")
-shutil.copy(os.path.join(DOCS_IMAGES, "MonaLisa_Remix_Flickr.jpg"), "test_diff.jpg")
 
 
 def test_load_from_url():
