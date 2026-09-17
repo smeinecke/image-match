@@ -242,3 +242,62 @@ the driver if a path may have more duplicates, or override it per call:
     ses = SignatureES(es, delete_duplicates_limit=50000)
     ses.delete_duplicates('https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg', limit=50000)
 
+To remove an image entirely — every record with that exact path — use
+``delete_image``:
+
+.. code-block:: python
+
+    ses.delete_image('https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg')
+
+It shares the same candidate scan and ``limit`` parameter as
+``delete_duplicates`` (records whose paths are merely *similar* are kept —
+the stored ``path`` must match exactly). On MongoDB the path is matched
+directly, so no limit applies.
+
+Bulk ingestion
+^^^^^^^^^^^^^^
+For many images, ``add_images`` generates all signatures first and then sends
+them to the backend in a single bulk request — much faster than calling
+``add_image`` in a loop:
+
+.. code-block:: python
+
+    ses.add_images(['img1.jpg', 'img2.jpg', 'img3.jpg'],
+                   metadata={'batch': 'import-1'},   # broadcast to every record
+                   refresh_after=True)
+
+``metadata`` can also be a list aligned with ``paths`` for per-image values.
+Signature generation is the expensive part; ``n_threads`` parallelizes it
+(threads help most for URL/bytes inputs, since decoding partially releases
+the GIL):
+
+.. code-block:: python
+
+    ses.add_images(urls, n_threads=8)
+
+For CPU-bound bulk imports, generate the records in a process pool —
+``make_record`` is picklable by design — and hand them to ``insert_records``:
+
+.. code-block:: python
+
+    from multiprocessing import Pool
+    from functools import partial
+    from image_match.signature_database_base import make_record
+
+    with Pool() as pool:
+        records = pool.map(partial(make_record, gis=ses.gis, k=ses.k, N=ses.N), paths)
+    ses.insert_records(records, refresh_after=True)
+
+The async drivers expose the same API: ``await ases.add_images(...)`` runs
+signature generation in a worker thread and bulk-inserts with
+``helpers.async_bulk``.
+
+Limitations
+^^^^^^^^^^^
+The signature describes the image as a whole — it does not locate *where* a
+match occurs. Searching with a crop or detail of an indexed image (or vice
+versa) is not supported: cropping changes the grid geometry, so the
+signatures are no longer comparable. For cropped-variant matching, index the
+crop as its own record or use ``all_orientations=True`` for rotations and
+mirrors.
+
