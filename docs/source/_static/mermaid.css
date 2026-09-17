@@ -1,0 +1,14 @@
+/* sphinxcontrib-mermaid injects `svg { height: 500px; width: 100% }` at
+   runtime, which squashes tall/wide diagrams into unreadability. !important
+   is needed because their stylesheet is injected after this one. */
+.mermaid-container > pre > svg,
+pre.mermaid > svg {
+    height: auto !important;
+    width: auto !important;
+    max-width: 100% !important;
+}
+
+.mermaid-container > pre,
+pre.mermaid {
+    overflow-x: auto;
+}

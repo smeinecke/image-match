@@ -73,8 +73,8 @@ quantize them into a compact integer vector.
 
 .. mermaid::
 
-    flowchart TD
-        subgraph sig["Signature generation — image_match.goldberg"]
+    flowchart TB
+        subgraph sig["1. Signature generation"]
             direction TB
             A["input image<br/>path · URL · array · bytes"] --> B["preprocess_image<br/>decode → greyscale float array"]
             B --> C["crop_image<br/>percentile bounds (5–95%)<br/>drop featureless borders"]
@@ -85,7 +85,7 @@ quantize them into a compact integer vector.
             G --> H["signature<br/>int8 vector, 9·9·8 = 648 dims"]
         end
 
-        subgraph idx["Indexing — make_record"]
+        subgraph idx["2. Indexing"]
             direction TB
             H --> I["get_words<br/>N = 63 overlapping words × k = 16"]
             I --> J["max_contrast<br/>collapse to {-1, 0, 1}"]
@@ -94,7 +94,7 @@ quantize them into a compact integer vector.
             L --> M[("backend index")]
         end
 
-        subgraph qry["Search — search_image"]
+        subgraph qry["3. Search"]
             direction TB
             Q["query image → same pipeline → record"] --> R["word query:<br/>match any simple_word_*"]
             M -.-> R
