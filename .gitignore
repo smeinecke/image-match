@@ -40,6 +40,7 @@ htmlcov/
 .coverage.*
 .cache
 .pytest_cache
+.ruff_cache
 nosetests.xml
 coverage.xml
 
@@ -55,6 +56,5 @@ docs/_build/
 
 # PyBuilder
 target/
-image_match/web/static/tmp/
 
 *.jpg

@@ -26,7 +26,7 @@ test:
 	uv run pytest tests -m "not integration"
 
 test-cov:
-	uv run pytest tests -m "not integration" --cov --cov-report=xml --cov-report=term-missing
+	uv run pytest tests -m "not integration" --cov=image_match --cov-report=xml --cov-report=term-missing
 
 test-integration:
 	uv run pytest tests -v -m integration --timeout=120
