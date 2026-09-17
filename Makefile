@@ -75,7 +75,7 @@ pyright:
 	uv run pyright
 
 docs:
-	uv run --extra docs sphinx-build -W -b html docs/source docs/build
+	uv run --extra docs sphinx-build -W -b html docs/source docs/_build
 
 # Mutation testing (mutmut). Runs the non-integration suite per mutant.
 mutation:
