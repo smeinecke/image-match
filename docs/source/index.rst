@@ -26,6 +26,7 @@ Contents
     signatures
     searches
     backends
+    migration
     docs
 
 

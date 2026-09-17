@@ -7,8 +7,8 @@ one you need:
 
     $ pip install "image-match[elasticsearch]"        # Elasticsearch driver
     $ pip install "image-match[elasticsearch-async]"  # async Elasticsearch driver
-    $ pip install "image-match[opensearch]"           # OpenSearch driver
-    $ pip install "image-match[opensearch-async]"     # async OpenSearch driver
+    $ pip install "image-match[opensearch]"           # OpenSearch driver (+ k-NN)
+    $ pip install "image-match[opensearch-async]"     # async OpenSearch driver (+ k-NN)
     $ pip install "image-match[mongo]"                # MongoDB driver
 
 OpenSearch
@@ -52,6 +52,40 @@ plus the same constructor options (``index``, ``timeout``, ``size``,
 ``delete_duplicates_limit``). For OpenSearch, swap in
 ``AsyncSignatureOpenSearch`` with an ``AsyncOpenSearch`` client. MongoDB has no
 async driver; wrap the sync driver in ``asyncio.to_thread`` instead if needed.
+
+OpenSearch k-NN
+---------------
+``SignatureOpenSearchKNN`` (and ``AsyncSignatureOpenSearchKNN``) use
+OpenSearch's native approximate nearest-neighbour search on the ``signature``
+vector directly, instead of the word-overlap disjunction. The record format is
+identical — records already store ``signature``, so no data transformation is
+needed, only a different index mapping:
+
+.. code-block:: python
+
+    from opensearchpy import OpenSearch
+    from image_match.opensearch_knn_driver import SignatureOpenSearchKNN, knn_index_body
+
+    client = OpenSearch("http://localhost:9201")
+    client.indices.create(index="images_knn", body=knn_index_body(648))
+
+    ses = SignatureOpenSearchKNN(client, index="images_knn")
+    ses.add_image("cat.jpg", refresh_after=True)
+    matches = ses.search_image("cat.jpg")
+
+The index must be created with ``index.knn: true`` and the ``signature`` field
+mapped as ``knn_vector`` — ``knn_index_body()`` produces exactly that (648 is
+the signature length for the default ``n_grid=9``). All other fields stay
+dynamically mapped, so ``simple_word_*`` fields still index normally and the
+classic word drivers keep working on the same index — migrations are
+reversible (see :doc:`migration`).
+
+The knn candidates are rescored client-side with the usual normalized
+distance, so ``dist``/``distance_cutoff`` semantics are unchanged. The
+difference is recall: HNSW is *approximate* — ``size`` controls the candidate
+count ``k``; raise it for better recall on large indexes. Supported engines
+are ``lucene`` (default, no native dependency) and ``faiss``/``nmslib`` where
+available, via ``knn_index_body(..., engine=..., space_type=...)``.
 
 MongoDB
 -------
