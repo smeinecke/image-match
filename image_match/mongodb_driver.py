@@ -38,7 +38,8 @@ class SignatureMongo(SignatureDatabaseBase):
         self.index_names = []
         # Extract index fields, if any exist yet
         if self.collection.count_documents({}) > 0:
-            self.index_names = [field for field in self.collection.find_one({}).keys() if field.find("simple") > -1]
+            doc = self.collection.find_one({}) or {}
+            self.index_names = [field for field in doc.keys() if field.find("simple") > -1]
 
         super(SignatureMongo, self).__init__(*args, **kwargs)
 
@@ -81,7 +82,10 @@ class SignatureMongo(SignatureDatabaseBase):
         initial_q = Queue()
 
         for field_name in self.index_names[:word_limit]:
-            initial_q.put({field_name: rec[field_name]})
+            # a field may be absent from rec if the index was built with a
+            # different N (number of words); skip instead of raising KeyError
+            if field_name in rec:
+                initial_q.put({field_name: rec[field_name]})
 
         # enqueue a sentinel value so we know we have reached the end of the queue
         initial_q.put("STOP")
@@ -162,7 +166,8 @@ class SignatureMongo(SignatureDatabaseBase):
     def index_collection(self):
         """Index a collection on words."""
         # Index on words
-        self.index_names = [field for field in self.collection.find_one({}).keys() if field.find("simple") > -1]
+        doc = self.collection.find_one({}) or {}
+        self.index_names = [field for field in doc.keys() if field.find("simple") > -1]
         for name in self.index_names:
             self.collection.create_index(name)
 

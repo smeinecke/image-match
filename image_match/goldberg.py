@@ -222,7 +222,11 @@ class ImageSignature(object):
                     img = None
                 if img is None:
                     raise CorruptImageError()
-            img = img.convert("RGB")
+            try:
+                # PIL decodes lazily; truncated data raises here, not at open()
+                img = img.convert("RGB")
+            except OSError:
+                raise CorruptImageError()
             return rgb2gray(np.asarray(img, dtype=np.uint8))
 
         if isinstance(image_or_path, (str, os.PathLike)):
@@ -237,7 +241,7 @@ class ImageSignature(object):
                 return imread(image_or_path, as_gray=True)
             return rgb2gray(arr)
 
-        if type(image_or_path) is np.ndarray:
+        if isinstance(image_or_path, np.ndarray):
             try:
                 return rgb2gray(image_or_path)
             except ValueError:
@@ -561,4 +565,5 @@ class ImageSignature(object):
         norm_diff = np.linalg.norm(b - a)
         norm1 = np.linalg.norm(b)
         norm2 = np.linalg.norm(a)
-        return norm_diff / (norm1 + norm2)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return norm_diff / (norm1 + norm2)
