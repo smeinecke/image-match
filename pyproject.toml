@@ -58,8 +58,8 @@ extra = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ascribe/image-match/"
-Documentation = "http://image-match.readthedocs.io/en/latest/"
+Homepage = "https://github.com/smeinecke/image-match/"
+Documentation = "https://smeinecke.github.io/image-match/"
 
 [dependency-groups]
 dev = [

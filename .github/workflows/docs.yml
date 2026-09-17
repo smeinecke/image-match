@@ -1,0 +1,62 @@
+name: Docs
+
+on:
+  push:
+    branches: [master, py3.13]
+    paths:
+      - "docs/**"
+      - "src/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Cache uv
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/uv
+          key: uv-cache-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            uv-cache-
+
+      - name: Set up Python environment
+        run: |
+          wget -qO- https://astral.sh/uv/install.sh | sh
+          uv sync --extra docs
+
+      - name: Build Sphinx docs
+        run: uv run sphinx-build -b html -W docs/source docs/build/html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/build/html
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,6 +1,6 @@
 [![PyPI](https://img.shields.io/pypi/status/image-match.svg?maxAge=2592000)](https://pypi.python.org/pypi/image-match)
 [![PyPI](https://img.shields.io/pypi/v/image-match.svg)](https://pypi.python.org/pypi/image-match)
-[![Documentation Status](https://readthedocs.org/projects/image-match/badge/?version=latest)](https://image-match.readthedocs.org/en/latest/)
+[![Documentation Status](https://github.com/smeinecke/image-match/actions/workflows/docs.yml/badge.svg)](https://smeinecke.github.io/image-match/)
 [![codecov](https://codecov.io/gh/edjolabs/image-match/branch/master/graph/badge.svg)](https://codecov.io/gh/edjolabs/image-match)
 
 ![image-match](https://cloud.githubusercontent.com/assets/6517700/17741093/41040a64-649b-11e6-8499-48b78ddca56b.png)
@@ -27,10 +27,10 @@ easy scaling and deployment.
 
 ## Quick start
 
-### [Install and setup image-match](http://image-match.readthedocs.io/en/latest/start.html)
+### [Install and setup image-match](https://smeinecke.github.io/image-match/start.html)
 
 Once you're up and running, read these two (short) sections of the documentation to get a feel
 for what image-match is capable of:
 
-### [Image signatures](http://image-match.readthedocs.io/en/latest/signatures.html)
-### [Storing and searching images](http://image-match.readthedocs.io/en/latest/searches.html)
+### [Image signatures](https://smeinecke.github.io/image-match/signatures.html)
+### [Storing and searching images](https://smeinecke.github.io/image-match/searches.html)
