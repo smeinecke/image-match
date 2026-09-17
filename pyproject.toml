@@ -95,6 +95,7 @@ markers = [
 
 [tool.ruff]
 exclude = ["docs", "build", "dist", "*.egg-info", ".venv"]
+src = ["src", "tests"]
 target-version = "py313"
 line-length = 160
 indent-width = 4

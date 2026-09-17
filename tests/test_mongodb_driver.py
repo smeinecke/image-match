@@ -8,9 +8,9 @@ from pymongo.errors import ServerSelectionTimeoutError
 
 from image_match.mongodb_driver import SignatureMongo
 
-pytestmark = pytest.mark.integration
+from .helpers import TEST_IMG_URL as test_img_url1
 
-test_img_url1 = "https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg"
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture

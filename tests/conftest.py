@@ -1,16 +1,10 @@
 import shutil
-from contextlib import suppress
-from pathlib import Path
-from urllib.request import urlretrieve
 
 import pytest
 
-# the original test URLs are no longer reachable; the flickr URL still
-# resolves, and docs/source/_images holds copies of the reference images
-DOCS_IMAGES = Path(__file__).parent.parent / "docs" / "source" / "_images"
-TEST_IMG_URL = "https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg"
+from .helpers import BACKENDS, DOCS_IMAGES, TEST_IMG_URL, download, make_backend
 
-# file name -> committed reference image (or the downloaded one, keyed None)
+# file name -> committed reference image (None = the downloaded one)
 STAGED_IMAGES = {
     "test.jpg": "MonaLisa_Wikipedia.jpg",
     "test2.jpg": "MonaLisa_Wikipedia.jpg",
@@ -27,8 +21,7 @@ def downloaded_image(tmp_path_factory):
     Tests that need it fail clearly if the network is unavailable.
     """
     dest = tmp_path_factory.mktemp("downloads") / "downloaded.jpg"
-    with suppress(OSError):
-        urlretrieve(TEST_IMG_URL, dest)
+    download(TEST_IMG_URL, dest)
     return dest
 
 
@@ -44,3 +37,9 @@ def workdir(tmp_path, monkeypatch, downloaded_image):
         if src.exists():
             shutil.copy(src, name)
     return tmp_path
+
+
+@pytest.fixture(params=BACKENDS)
+def backend(request):
+    """A search backend (client + driver), parametrized over ES and OpenSearch."""
+    return make_backend(request.param)

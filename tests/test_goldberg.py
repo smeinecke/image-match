@@ -3,9 +3,7 @@ from numpy import array_equal, ndarray
 
 from image_match.goldberg import CorruptImageError, ImageSignature
 
-# the only original test image URL that still resolves; the reference
-# images themselves are staged into the test cwd by conftest.workdir
-test_img_url = "https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg"
+from .helpers import TEST_IMG_URL as test_img_url
 
 
 def test_load_from_url():
