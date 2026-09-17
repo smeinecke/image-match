@@ -28,12 +28,13 @@ def diverging(v: float, vmax: float) -> tuple[int, int, int]:
     """Map v in [-vmax, vmax] to blue→white→red."""
     t = max(-1.0, min(1.0, v / vmax))
     rgb = ZERO + t * (POS - ZERO) if t >= 0 else ZERO + (-t) * (NEG - ZERO)
-    return tuple(int(c) for c in rgb)
+    r, g, b = (int(c) for c in rgb)
+    return (r, g, b)
 
 
 def upscale(img: Image.Image, factor: int) -> Image.Image:
     """Nearest-neighbour upscale so small matrices stay crisp."""
-    return img.resize((img.width * factor, img.height * factor), Image.NEAREST)
+    return img.resize((img.width * factor, img.height * factor), Image.Resampling.NEAREST)
 
 
 def matrix_image(mat: np.ndarray, cell: int = 24, grid: bool = True) -> Image.Image:
