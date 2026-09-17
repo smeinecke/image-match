@@ -104,9 +104,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Start Elasticsearch, OpenSearch and MongoDB
+      - name: Start Elasticsearch, OpenSearch, MongoDB and Toxiproxy
         run: |
-          docker compose up -d elasticsearch mongodb opensearch opensearch3
+          docker compose up -d elasticsearch mongodb opensearch opensearch3 toxiproxy
+          # Wait for Toxiproxy to be ready
+          echo "Waiting for Toxiproxy to start..."
+          timeout 30 bash -c 'until curl -sf http://localhost:8475/version >/dev/null; do sleep 1; done'
+          echo "Toxiproxy is ready!"
           # Wait for Elasticsearch to be ready
           echo "Waiting for Elasticsearch to start..."
           timeout 180 bash -c 'until curl -sf http://localhost:9200/_cluster/health >/dev/null; do sleep 2; done'

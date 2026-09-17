@@ -27,6 +27,11 @@ Integration tests run against live Elasticsearch, OpenSearch and MongoDB in Dock
 make test-integration-local   # starts services, runs tests, stops services
 ```
 
+This includes the Toxiproxy fault-injection tier (`tests/test_faults_integration.py`),
+which exercises real transport failures (proxy kill, latency, connection resets)
+between the drivers and OpenSearch. `make db-up` starts the toxiproxy service
+alongside the databases.
+
 ## Pull requests
 
 - Keep changes in logically grouped commits.
