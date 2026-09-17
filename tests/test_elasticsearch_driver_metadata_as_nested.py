@@ -15,7 +15,11 @@ pytestmark = pytest.mark.integration
 # resolves, and docs/source/_images holds copies of the reference images
 DOCS_IMAGES = os.path.join(os.path.dirname(__file__), "..", "docs", "source", "_images")
 test_img_url1 = "https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg"
-urlretrieve(test_img_url1, "test1.jpg")
+try:
+    # import-time download; tests that need the file fail clearly if offline
+    urlretrieve(test_img_url1, "test1.jpg")
+except OSError:
+    pass
 shutil.copy(os.path.join(DOCS_IMAGES, "MonaLisa_Wikipedia.jpg"), "test2.jpg")
 
 INDEX_NAME = "test_environment_{}".format(hashlib.md5(os.urandom(128)).hexdigest()[:12])

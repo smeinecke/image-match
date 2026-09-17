@@ -18,9 +18,13 @@ master_doc = 'index'
 project = u'image_match'
 copyright = u'2016, Ryan Henderson'
 author = u'Ryan Henderson'
-version = u'0.2.1'
-release = u'0.2.1'
-language = None
+try:
+    from importlib.metadata import version as _pkg_version
+    release = _pkg_version('image-match')
+except Exception:
+    release = '0.0.0'
+version = release
+language = 'en'
 exclude_patterns = []
 pygments_style = 'sphinx'
 todo_include_todos = True
