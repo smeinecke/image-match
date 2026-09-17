@@ -7,6 +7,7 @@ services:
     container_name: image-match
     volumes:
       - .:/usr/src/app/
+      - /usr/src/app/.venv
     depends_on:
      - "elasticsearch"
      - "mongodb"
@@ -37,8 +38,9 @@ services:
     container_name: bdocs
     volumes:
       - .:/usr/src/app/
+      - /usr/src/app/.venv
     working_dir: /usr/src/app/docs
-    command: make html
+    command: uv run --all-extras make html
 
   vdocs:
     image: nginx:alpine
