@@ -31,7 +31,6 @@ dependencies = [
     "numpy>=1.24",
     "Pillow>=10.0",
     "scikit-image>=0.22",
-    "elasticsearch>=7.17.0,<8.0.0",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +43,12 @@ test = [
 docs = [
     "Sphinx>=8.0",
     "sphinx-rtd-theme>=3.0",
+]
+elasticsearch = [
+    "elasticsearch>=7.17.0,<8.0.0",
+]
+opensearch = [
+    "opensearch-py>=2.4",
 ]
 mongo = [
     "pymongo>=4.0",

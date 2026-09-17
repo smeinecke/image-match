@@ -71,7 +71,7 @@ class SignatureES(SignatureDatabaseBase):
         if pre_filter is not None:
             body["query"]["bool"]["filter"] = pre_filter
 
-        res = self.es.search(index=self.index, body=body, size=self.size, timeout=self.timeout)["hits"]["hits"]
+        res = self._search(body)["hits"]["hits"]
 
         sigs = np.array([x["_source"]["signature"] for x in res])
 
@@ -88,6 +88,14 @@ class SignatureES(SignatureDatabaseBase):
         for i, row in enumerate(formatted_res):
             row["dist"] = dists[i]
         return [y for y in formatted_res if y["dist"] < self.distance_cutoff]
+
+    def _search(self, body: dict) -> Any:
+        """Run the word-match search.
+
+        Isolated so subclasses can adapt the call to clients with different
+        signatures (e.g. opensearch-py).
+        """
+        return self.es.search(index=self.index, body=body, size=self.size, timeout=self.timeout)
 
     def insert_single_record(self, rec: dict, refresh_after: bool = False) -> None:
         """Insert an image record.
