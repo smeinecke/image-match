@@ -167,7 +167,7 @@ def test_lookup_with_cutoff(ses):
     assert len(r) == 0
 
 
-def check_distance_consistency(ses):
+def test_distance_consistency(ses):
     ses.add_image("test1.jpg")
     ses.add_image("test2.jpg", refresh_after=True)
     r = ses.search_image("test1.jpg")
@@ -234,8 +234,7 @@ def test_duplicate(ses):
 
 def test_duplicate_removal(ses):
     for i in range(10):
-        ses.add_image("test1.jpg")
-    sleep(1)
+        ses.add_image("test1.jpg", refresh_after=(i == 9))
     r = ses.search_image("test1.jpg")
     assert len(r) == 10
     ses.delete_duplicates("test1.jpg")

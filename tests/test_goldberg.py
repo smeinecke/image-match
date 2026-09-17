@@ -35,10 +35,7 @@ def test_load_from_file():
 
 
 def test_load_from_unicode_path():
-    try:
-        path = "test.jpg"
-    except NameError:
-        return
+    path = "test.jpg"
     gis = ImageSignature()
     sig = gis.generate_signature(path)
     assert type(sig) is ndarray
