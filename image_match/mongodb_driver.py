@@ -1,16 +1,22 @@
+from __future__ import annotations
+
 from multiprocessing import cpu_count
 from queue import Empty, Queue
 from threading import Thread
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from .signature_database_base import SignatureDatabaseBase, normalized_distance
+from .signature_database_base import PreFilter, SignatureDatabaseBase, normalized_distance
+
+if TYPE_CHECKING:
+    from pymongo.collection import Collection
 
 
 class SignatureMongo(SignatureDatabaseBase):
     """MongoDB driver for image-match"""
 
-    def __init__(self, collection, *args, **kwargs):
+    def __init__(self, collection: Collection, *args: Any, **kwargs: Any) -> None:
         """Additional MongoDB setup
 
         Args:
@@ -43,7 +49,16 @@ class SignatureMongo(SignatureDatabaseBase):
 
         super(SignatureMongo, self).__init__(*args, **kwargs)
 
-    def search_single_record(self, rec, pre_filter=None, *, n_parallel_words=1, word_limit=None, process_timeout=None, maximum_matches=1000):
+    def search_single_record(
+        self,
+        rec: dict,
+        pre_filter: PreFilter = None,
+        *,
+        n_parallel_words: int | None = 1,
+        word_limit: int | None = None,
+        process_timeout: float | None = None,
+        maximum_matches: int = 1000,
+    ) -> list[dict]:
         """Search for a matching image record.
 
         Args:
@@ -72,23 +87,7 @@ class SignatureMongo(SignatureDatabaseBase):
         if word_limit is None:
             word_limit = self.N
 
-        # index_names may be empty if the collection was populated after
-        # this instance was created; try to pick the fields up lazily
-        if not self.index_names:
-            doc = self.collection.find_one({})
-            if doc:
-                self.index_names = [field for field in doc.keys() if field.find("simple") > -1]
-
-        initial_q = Queue()
-
-        for field_name in self.index_names[:word_limit]:
-            # a field may be absent from rec if the index was built with a
-            # different N (number of words); skip instead of raising KeyError
-            if field_name in rec:
-                initial_q.put({field_name: rec[field_name]})
-
-        # enqueue a sentinel value so we know we have reached the end of the queue
-        initial_q.put("STOP")
+        initial_q = self._word_query_queue(rec, word_limit)
         queue_empty = False
 
         # create an empty queue for results
@@ -150,7 +149,38 @@ class SignatureMongo(SignatureDatabaseBase):
 
         return match_list
 
-    def insert_single_record(self, rec):
+    def _word_query_queue(self, rec: dict, word_limit: int) -> Queue:
+        """Build the work queue of {word_field: word_value} lookups.
+
+        Lazily repopulates index_names if the collection was populated after
+        this instance was created, and ends with a 'STOP' sentinel.
+
+        Args:
+            rec (dict): an image record in the format returned by make_record
+            word_limit (int): only use this many word fields
+
+        Returns:
+            a Queue of single-entry dicts, terminated by 'STOP'
+
+        """
+        # index_names may be empty if the collection was populated after
+        # this instance was created; try to pick the fields up lazily
+        if not self.index_names:
+            doc = self.collection.find_one({}) or {}
+            self.index_names = [field for field in doc.keys() if field.find("simple") > -1]
+
+        initial_q = Queue()
+        for field_name in self.index_names[:word_limit]:
+            # a field may be absent from rec if the index was built with a
+            # different N (number of words); skip instead of raising KeyError
+            if field_name in rec:
+                initial_q.put({field_name: rec[field_name]})
+
+        # enqueue a sentinel value so we know we have reached the end of the queue
+        initial_q.put("STOP")
+        return initial_q
+
+    def insert_single_record(self, rec: dict) -> None:
         """Insert an image record, creating the word indexes if needed.
 
         Args:
@@ -163,7 +193,7 @@ class SignatureMongo(SignatureDatabaseBase):
         if len(self.collection.index_information()) <= 1:
             self.index_collection()
 
-    def index_collection(self):
+    def index_collection(self) -> None:
         """Index a collection on words."""
         # Index on words
         doc = self.collection.find_one({}) or {}
@@ -172,7 +202,9 @@ class SignatureMongo(SignatureDatabaseBase):
             self.collection.create_index(name)
 
 
-def get_next_match(result_q, word, collection, signature, cutoff=0.5, max_in_cursor=100, pre_filter=None):
+def get_next_match(
+    result_q: Queue, word: dict, collection: Collection, signature: np.ndarray, cutoff: float = 0.5, max_in_cursor: int = 100, pre_filter: PreFilter = None
+) -> None:
     """Given a cursor, iterate through matches
 
     Scans a cursor for word matches below a distance threshold.

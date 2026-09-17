@@ -1,14 +1,20 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from .signature_database_base import SignatureDatabaseBase, normalized_distance
+from .signature_database_base import PreFilter, SignatureDatabaseBase, normalized_distance
+
+if TYPE_CHECKING:
+    from elasticsearch import Elasticsearch
 
 
 class SignatureES(SignatureDatabaseBase):
     """Elasticsearch driver for image-match"""
 
-    def __init__(self, es, index="images", timeout="10s", size=100, *args, **kwargs):
+    def __init__(self, es: Elasticsearch, index: str = "images", timeout: str = "10s", size: int = 100, *args: Any, **kwargs: Any) -> None:
         """Extra setup for Elasticsearch
 
         Args:
@@ -41,7 +47,7 @@ class SignatureES(SignatureDatabaseBase):
 
         super(SignatureES, self).__init__(*args, **kwargs)
 
-    def search_single_record(self, rec, pre_filter=None):
+    def search_single_record(self, rec: dict, pre_filter: PreFilter = None) -> list[dict]:
         """Search for a matching image record.
 
         Args:
@@ -83,7 +89,7 @@ class SignatureES(SignatureDatabaseBase):
             row["dist"] = dists[i]
         return [y for y in formatted_res if y["dist"] < self.distance_cutoff]
 
-    def insert_single_record(self, rec, refresh_after=False):
+    def insert_single_record(self, rec: dict, refresh_after: bool = False) -> None:
         """Insert an image record.
 
         Args:
@@ -93,9 +99,9 @@ class SignatureES(SignatureDatabaseBase):
 
         """
         rec["timestamp"] = datetime.now()
-        self.es.index(index=self.index, body=rec, refresh=refresh_after)
+        self.es.index(index=self.index, document=rec, refresh=refresh_after)
 
-    def delete_duplicates(self, path):
+    def delete_duplicates(self, path: str) -> None:
         """Delete all but one entries in elasticsearch whose `path` value is equivalent to that of path.
 
         Args:

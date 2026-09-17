@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import os
 from io import BytesIO
+from typing import Union
 
 import numpy as np
 from PIL import Image
@@ -10,6 +13,9 @@ try:
     from cairosvg import svg2png
 except ImportError:
     svg2png = None
+
+# accepted inputs anywhere an image can be loaded from
+ImageInput = Union[str, os.PathLike, bytes, np.ndarray]
 
 
 class CorruptImageError(RuntimeError):
@@ -22,7 +28,16 @@ class ImageSignature(object):
     Based on the method of Goldberg, et al. Available at http://www.cs.cmu.edu/~hcwong/Pdfs/icip02.ps
     """
 
-    def __init__(self, n=9, crop_percentiles=(5, 95), P=None, diagonal_neighbors=True, identical_tolerance=2 / 255.0, n_levels=2, fix_ratio=False):
+    def __init__(
+        self,
+        n: int = 9,
+        crop_percentiles: tuple[int, int] | None = (5, 95),
+        P: int | None = None,
+        diagonal_neighbors: bool = True,
+        identical_tolerance: float = 2 / 255.0,
+        n_levels: int = 2,
+        fix_ratio: bool = False,
+    ) -> None:
         """Initialize the signature generator.
 
         The default parameters match those given in Goldberg's paper.
@@ -86,7 +101,7 @@ class ImageSignature(object):
 
         self.handle_mpo = True
 
-    def generate_signature(self, path_or_image, bytestream=False):
+    def generate_signature(self, path_or_image: ImageInput, bytestream: bool = False) -> np.ndarray:
         """Generates an image signature.
 
         See section 3 of Goldberg, et al.
@@ -173,7 +188,7 @@ class ImageSignature(object):
         return np.ravel(diff_mat).astype("int8")
 
     @staticmethod
-    def preprocess_image(image_or_path, bytestream=False, handle_mpo=False):
+    def preprocess_image(image_or_path: ImageInput, bytestream: bool = False, handle_mpo: bool = False) -> np.ndarray:
         """Loads an image and converts to greyscale.
 
         Corresponds to 'step 1' in Goldberg's paper
@@ -207,6 +222,8 @@ class ImageSignature(object):
 
         """
         if bytestream:
+            if not isinstance(image_or_path, (bytes, bytearray, memoryview)):
+                raise TypeError("bytestream=True requires raw image bytes")
             try:
                 img = Image.open(BytesIO(image_or_path))
             except IOError:
@@ -251,7 +268,7 @@ class ImageSignature(object):
         raise TypeError("Path or image required.")
 
     @staticmethod
-    def crop_image(image, lower_percentile=5, upper_percentile=95, fix_ratio=False):
+    def crop_image(image: np.ndarray, lower_percentile: int = 5, upper_percentile: int = 95, fix_ratio: bool = False) -> list[tuple[int, int]]:
         """Crops an image, removing featureless border regions.
 
         Corresponds to the first part of 'step 2' in Goldberg's paper
@@ -294,6 +311,12 @@ class ImageSignature(object):
             lower_column_limit = int(lower_percentile / 100.0 * image.shape[1])
             upper_column_limit = int(upper_percentile / 100.0 * image.shape[1])
 
+        # searchsorted returns np.intp; normalize to plain ints
+        lower_row_limit = int(lower_row_limit)
+        upper_row_limit = int(upper_row_limit)
+        lower_column_limit = int(lower_column_limit)
+        upper_column_limit = int(upper_column_limit)
+
         # if fix_ratio, return both limits as the larger range
         if fix_ratio:
             if (upper_row_limit - lower_row_limit) > (upper_column_limit - lower_column_limit):
@@ -305,7 +328,7 @@ class ImageSignature(object):
         return [(lower_row_limit, upper_row_limit), (lower_column_limit, upper_column_limit)]
 
     @staticmethod
-    def compute_grid_points(image, n=9, window=None):
+    def compute_grid_points(image: np.ndarray, n: int = 9, window: list[tuple[int, int]] | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Computes grid points for image analysis.
 
         Corresponds to the second part of 'step 2' in the paper
@@ -338,7 +361,7 @@ class ImageSignature(object):
         return x_coords, y_coords  # return pairs
 
     @staticmethod
-    def compute_mean_level(image, x_coords, y_coords, P=None):
+    def compute_mean_level(image: np.ndarray, x_coords: np.ndarray, y_coords: np.ndarray, P: float | None = None) -> np.ndarray:
         """Computes array of greyness means.
 
         Corresponds to 'step 3'
@@ -380,7 +403,7 @@ class ImageSignature(object):
 
         """
         if P is None:
-            P = max([2.0, int(0.5 + min(image.shape) / 20.0)])  # per the paper
+            P = max(2.0, int(0.5 + min(image.shape) / 20.0))  # per the paper
 
         avg_grey = np.zeros((x_coords.shape[0], y_coords.shape[0]))
 
@@ -396,7 +419,7 @@ class ImageSignature(object):
         return avg_grey
 
     @staticmethod
-    def compute_differentials(grey_level_matrix, diagonal_neighbors=True):
+    def compute_differentials(grey_level_matrix: np.ndarray, diagonal_neighbors: bool = True) -> np.ndarray:
         """Computes differences in greylevels for neighboring grid points.
 
         First part of 'step 4' in the paper.
@@ -477,7 +500,7 @@ class ImageSignature(object):
         return np.dstack([up_neighbors, left_neighbors, right_neighbors, down_neighbors])
 
     @staticmethod
-    def normalize_and_threshold(difference_array, identical_tolerance=2 / 255.0, n_levels=2):
+    def normalize_and_threshold(difference_array: np.ndarray, identical_tolerance: float = 2 / 255.0, n_levels: int = 2) -> None:
         """Normalizes difference matrix in place.
 
         'Step 4' of the paper.  The flattened version of this array is the image signature.
@@ -541,7 +564,7 @@ class ImageSignature(object):
         return None
 
     @staticmethod
-    def normalized_distance(_a, _b):
+    def normalized_distance(_a: np.ndarray, _b: np.ndarray) -> float:
         """Compute normalized distance between two points.
 
         Computes || b - a || / ( ||b|| + ||a||)
@@ -566,4 +589,4 @@ class ImageSignature(object):
         norm1 = np.linalg.norm(b)
         norm2 = np.linalg.norm(a)
         with np.errstate(invalid="ignore", divide="ignore"):
-            return norm_diff / (norm1 + norm2)
+            return float(norm_diff / (norm1 + norm2))

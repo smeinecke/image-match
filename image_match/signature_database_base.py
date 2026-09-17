@@ -1,9 +1,16 @@
+from __future__ import annotations
+
 from itertools import product
 from operator import itemgetter
+from typing import Any, Optional, Union
 
 import numpy as np
 
-from image_match.goldberg import ImageSignature
+from image_match.goldberg import ImageInput, ImageSignature
+
+# a database filter clause: dict for MongoDB, dict or list of clauses for
+# Elasticsearch (e.g. {"term": {"metadata.tenant_id": "foo"}})
+PreFilter = Optional[Union[dict, list]]
 
 
 class SignatureDatabaseBase(object):
@@ -15,7 +22,7 @@ class SignatureDatabaseBase(object):
 
     """
 
-    def search_single_record(self, rec, pre_filter=None):
+    def search_single_record(self, rec: dict, pre_filter: PreFilter = None) -> list[dict]:
         """Search for a matching image record.
 
         Must be implemented by derived class.
@@ -80,7 +87,7 @@ class SignatureDatabaseBase(object):
         """
         raise NotImplementedError
 
-    def insert_single_record(self, rec):
+    def insert_single_record(self, rec: dict) -> None:
         """Insert an image record.
 
         Must be implemented by derived class.
@@ -118,7 +125,16 @@ class SignatureDatabaseBase(object):
         """
         raise NotImplementedError
 
-    def __init__(self, k=16, N=63, n_grid=9, crop_percentile=(5, 95), distance_cutoff=0.45, *signature_args, **signature_kwargs):
+    def __init__(
+        self,
+        k: int = 16,
+        N: int = 63,
+        n_grid: int = 9,
+        crop_percentile: tuple[int, int] | None = (5, 95),
+        distance_cutoff: float = 0.45,
+        *signature_args: Any,
+        **signature_kwargs: Any,
+    ) -> None:
         """Set up storage scheme for images
 
         Central to the speed of this approach is the transforming the image
@@ -187,7 +203,7 @@ class SignatureDatabaseBase(object):
 
         self.gis = ImageSignature(n=n_grid, crop_percentiles=crop_percentile, *signature_args, **signature_kwargs)
 
-    def add_image(self, path, img=None, bytestream=False, metadata=None, *args, **kwargs):
+    def add_image(self, path: str, img: ImageInput | None = None, bytestream: bool = False, metadata: dict | None = None, *args: Any, **kwargs: Any) -> None:
         """Add a single image to the database
 
         Args:
@@ -210,7 +226,9 @@ class SignatureDatabaseBase(object):
         rec = make_record(path, self.gis, self.k, self.N, img=img, bytestream=bytestream, metadata=metadata)
         self.insert_single_record(rec, *args, **kwargs)
 
-    def search_image(self, path, all_orientations=False, bytestream=False, pre_filter=None, **kwargs):
+    def search_image(
+        self, path: ImageInput, all_orientations: bool = False, bytestream: bool = False, pre_filter: PreFilter = None, **kwargs: Any
+    ) -> list[dict]:
         """Search for matches
 
         Args:
@@ -287,7 +305,9 @@ class SignatureDatabaseBase(object):
         return sorted(unique, key=itemgetter("dist"))
 
 
-def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
+def make_record(
+    path: ImageInput, gis: ImageSignature, k: int, N: int, img: ImageInput | None = None, bytestream: bool = False, metadata: dict | None = None
+) -> dict:
     """Makes a record suitable for database insertion.
 
     Note:
@@ -341,7 +361,7 @@ def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
          }
 
     """
-    record = {"path": path}
+    record: dict[str, Any] = {"path": path}
 
     if img is not None:
         signature = gis.generate_signature(img, bytestream=bytestream)
@@ -364,7 +384,7 @@ def make_record(path, gis, k, N, img=None, bytestream=False, metadata=None):
     return record
 
 
-def get_words(array, k, N):
+def get_words(array: np.ndarray, k: int, N: int) -> np.ndarray:
     """Gets N words of length k from an array.
 
     Words may overlap.
@@ -410,7 +430,7 @@ def get_words(array, k, N):
     return words
 
 
-def words_to_int(word_array):
+def words_to_int(word_array: np.ndarray) -> np.ndarray:
     """Converts a simplified word to an integer
 
     Encodes a k-byte word to int (as those returned by max_contrast).
@@ -440,7 +460,7 @@ def words_to_int(word_array):
     return np.dot(word_array + 1, coding_vector)
 
 
-def max_contrast(array):
+def max_contrast(array: np.ndarray) -> None:
     """Sets all positive values to one and all negative values to -1.
 
     Needed for first pass lookup on word table.
@@ -455,7 +475,7 @@ def max_contrast(array):
     return None
 
 
-def normalized_distance(_target_array, _vec, nan_value=1.0):
+def normalized_distance(_target_array: np.ndarray, _vec: np.ndarray, nan_value: float = 1.0) -> np.ndarray:
     """Compute normalized distance to many points.
 
     Computes || vec - b || / ( ||vec|| + ||b||) for every b in target_array

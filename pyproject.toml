@@ -104,12 +104,13 @@ explicit-preview-rules = true
 extend-select = [
     "I",
 ]
-select = ["E9", "F82", "D"]
+select = ["E9", "F82", "D", "ANN"]
 # D200/D205/D400/D401/D415: docstring style conventions relaxed for legacy docstrings
-ignore = ["D203", "D213", "D100", "F821", "D200", "D205", "D400", "D401", "D415"]
+# ANN401: Any is legitimate for *args/**kwargs pass-throughs to driver backends
+ignore = ["D203", "D213", "D100", "F821", "D200", "D205", "D400", "D401", "D415", "ANN401"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D"]
+"tests/**" = ["D", "ANN"]
 
 [tool.pyright]
 exclude = ["**/__pycache__", "**/dist", "**/build", "**/venv", "**/.venv"]
