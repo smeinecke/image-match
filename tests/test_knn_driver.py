@@ -118,6 +118,21 @@ def test_duplicate_removal(sknn):
     assert len(r) == 1
 
 
+def test_add_images_bulk_and_delete_image(sknn):
+    """Bulk insert + delete_image on a knn index (inherited OS mechanics)."""
+    n = sknn.add_images(["test1.jpg", "test2.jpg", "test_diff.jpg"], refresh_after=True)
+    assert n == 3
+    # test_diff is a near-duplicate of test1, test2 is just under the cutoff
+    assert len(sknn.search_image("test1.jpg")) == 3
+
+    assert sknn.delete_image("test_diff.jpg") == 1
+    import time
+
+    time.sleep(1)
+    r = sknn.search_image("test_diff.jpg")
+    assert all(hit["path"] != "test_diff.jpg" for hit in r)
+
+
 def test_word_driver_on_hybrid_index(sknn, os_backend):
     """The classic word driver must still work on a knn-mapped index."""
     from image_match.opensearch_driver import SignatureOpenSearch

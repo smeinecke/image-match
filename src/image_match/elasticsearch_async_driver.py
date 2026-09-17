@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, override
 
-from .elasticsearch_driver import build_word_query, duplicate_ids, format_hits
+from .elasticsearch_driver import build_word_query, duplicate_ids, exact_path_ids, format_hits, helpers_module
 from .signature_database_base import ImageInput, PreFilter, SignatureDatabaseBase, dedupe_results, make_record
 
 if TYPE_CHECKING:
@@ -144,6 +144,54 @@ class AsyncSignatureES(SignatureDatabaseBase):
         await self.insert_single_record(rec, *args, **kwargs)
 
     @override
+    async def add_images(
+        self,
+        paths: list[ImageInput],
+        metadata: dict[str, Any] | list[dict[str, Any] | None] | None = None,
+        bytestream: bool = False,
+        n_threads: int = 1,
+        **kwargs: Any,
+    ) -> int:
+        """Generate signatures for many images and bulk-insert the records.
+
+        Signature generation runs in a worker thread (with its own thread pool
+        when n_threads > 1); only the bulk request is awaited.
+
+        Args:
+            paths (list): paths, URLs, or raw image data
+            metadata (Optional): a single dict applied to every record, or a
+                list of dicts/None aligned with paths (default None)
+            bytestream (Optional[boolean]): inputs are raw image bytes (default False)
+            n_threads (Optional[int]): signature-generation threads (default 1)
+            **kwargs: passed to insert_records (e.g. refresh_after)
+
+        Returns:
+            the number of successfully indexed records
+
+        """
+        records = await asyncio.to_thread(self._make_records, list(paths), metadata, bytestream, n_threads)
+        return await self.insert_records(records, **kwargs)
+
+    @override
+    async def insert_records(self, records: list[dict[str, Any]], refresh_after: bool = False, **kwargs: Any) -> int:
+        """Bulk-insert pre-made records (see add_images).
+
+        Args:
+            records (list[dict]): image records in the format returned by make_record
+            refresh_after (Optional[boolean]): refresh the index after the bulk
+                request, making records searchable immediately (default False)
+            **kwargs: extra keyword arguments forwarded to helpers.async_bulk
+
+        Returns:
+            the number of successfully indexed records
+
+        """
+        for rec in records:
+            rec["timestamp"] = datetime.now()
+        ok, _ = await helpers_module(self.es).async_bulk(self.es, [{"_index": self.index, "_source": rec} for rec in records], refresh=refresh_after, **kwargs)
+        return ok
+
+    @override
     async def search_image(
         self, path: ImageInput, all_orientations: bool = False, bytestream: bool = False, pre_filter: PreFilter = None, **kwargs: Any
     ) -> list[dict[str, Any]]:
@@ -188,6 +236,29 @@ class AsyncSignatureES(SignatureDatabaseBase):
 
         for id_tag in duplicate_ids(await self._path_hits(path, limit), path):
             await self.es.delete(index=self.index, id=id_tag)
+
+    async def delete_image(self, path: str, limit: int | None = None) -> int:
+        """Delete all records whose stored path exactly equals `path`.
+
+        The path match query is fuzzy, so hits are filtered to exact matches
+        before deletion — documents with merely similar paths are kept.
+
+        Args:
+            path (string): path value to remove entirely from the index
+            limit (Optional[int]): maximum number of candidates to scan;
+                defaults to the instance's delete_duplicates_limit (default 10000)
+
+        Returns:
+            the number of documents deleted
+
+        """
+        if limit is None:
+            limit = self.delete_duplicates_limit
+
+        ids = exact_path_ids(await self._path_hits(path, limit), path)
+        for id_tag in ids:
+            await self.es.delete(index=self.index, id=id_tag)
+        return len(ids)
 
     async def _path_hits(self, path: str, limit: int) -> list[dict[str, Any]]:
         """Search for documents whose path field fuzzy-matches `path`."""

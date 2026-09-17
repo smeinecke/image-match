@@ -229,6 +229,61 @@ class SignatureDatabaseBase:
         rec = make_record(path, self.gis, self.k, self.N, img=img, bytestream=bytestream, metadata=metadata)
         self.insert_single_record(rec, *args, **kwargs)
 
+    def add_images(
+        self,
+        paths: list[ImageInput],
+        metadata: dict[str, Any] | list[dict[str, Any] | None] | None = None,
+        bytestream: bool = False,
+        n_threads: int = 1,
+        **kwargs: Any,
+    ) -> int:
+        """Generate signatures for many images and bulk-insert the records.
+
+        Signature generation is the bottleneck for bulk imports; n_threads > 1
+        parallelizes it (helps most for URL/bytes inputs since decode and numpy
+        partially release the GIL). For CPU-only workloads, run
+        signature_database_base.make_record in a multiprocessing pool — it is
+        picklable by design — and pass the records to insert_records.
+
+        Args:
+            paths (list): paths, URLs, or raw image data
+            metadata (Optional): a single dict applied to every record, or a
+                list of dicts/None aligned with paths (default None)
+            bytestream (Optional[boolean]): inputs are raw image bytes (default False)
+            n_threads (Optional[int]): signature-generation threads (default 1)
+            **kwargs: passed to insert_records (e.g. refresh_after)
+
+        Returns:
+            the number of successfully indexed records
+
+        """
+        records = self._make_records(list(paths), metadata=metadata, bytestream=bytestream, n_threads=n_threads)
+        return self.insert_records(records, **kwargs)
+
+    def _make_records(
+        self, paths: list[ImageInput], metadata: dict[str, Any] | list[dict[str, Any] | None] | None = None, bytestream: bool = False, n_threads: int = 1
+    ) -> list[dict[str, Any]]:
+        """Generate a record per input, optionally on a thread pool."""
+        metas = _normalize_metadata(metadata, len(paths))
+
+        def _gen(pair: tuple[ImageInput, dict[str, Any] | None]) -> dict[str, Any]:
+            p, m = pair
+            return make_record(p, self.gis, self.k, self.N, bytestream=bytestream, metadata=m)
+
+        if n_threads > 1:
+            with ThreadPoolExecutor(max_workers=n_threads) as pool:
+                return list(pool.map(_gen, zip(paths, metas)))
+        return [_gen(pair) for pair in zip(paths, metas)]
+
+    def insert_records(self, records: list[dict[str, Any]], **kwargs: Any) -> int:
+        """Bulk-insert records made by make_record/add_images.
+
+        Must be implemented by derived class; returns the number of records
+        successfully indexed.
+
+        """
+        raise NotImplementedError
+
     def search_image(
         self,
         path: ImageInput,
@@ -327,6 +382,18 @@ class SignatureDatabaseBase:
             records.append(make_record(path, self.gis, self.k, self.N, img=transformed_img))
 
         return records
+
+
+def _normalize_metadata(metadata: dict[str, Any] | list[dict[str, Any] | None] | None, n: int) -> list[dict[str, Any] | None]:
+    """Broadcast a single metadata dict, or validate a per-image list."""
+    if metadata is None:
+        return [None] * n
+    if isinstance(metadata, dict):
+        return [metadata] * n
+    metas = list(metadata)
+    if len(metas) != n:
+        raise ValueError(f"metadata list must match number of paths ({len(metas)} != {n})")
+    return metas
 
 
 def dedupe_results(result: list[dict[str, Any]]) -> list[dict[str, Any]]:

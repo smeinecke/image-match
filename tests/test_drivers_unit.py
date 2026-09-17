@@ -1,6 +1,6 @@
 """Unit tests for the database drivers using mocked clients — no services needed."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
@@ -197,6 +197,10 @@ class _StubDriver(SignatureDatabaseBase):
     def insert_single_record(self, rec, **kwargs):
         self.inserted.append(rec)
 
+    def insert_records(self, records, **kwargs):
+        self.inserted.extend(records)
+        return len(records)
+
 
 def test_add_image_delegates():
     d = _StubDriver()
@@ -226,6 +230,40 @@ def test_add_image_bytestream_forwarded():
     assert d.inserted[0]["path"] == "alias"
     assert d.inserted[0]["metadata"] == {"k": 1}
     assert len(d.inserted[0]["signature"]) == 648
+
+
+def test_add_images_bulk_delegates():
+    """add_images generates one record per path and bulk-inserts them."""
+    d = _StubDriver()
+    n = d.add_images(["test.jpg", "test2.jpg"])
+    assert n == 2
+    assert [r["path"] for r in d.inserted] == ["test.jpg", "test2.jpg"]
+    assert all(len(r["signature"]) == 648 for r in d.inserted)
+
+
+def test_add_images_threads_and_kwargs():
+    """n_threads parallelizes signature gen; **kwargs reach insert_records."""
+    d = _StubDriver()
+    d.insert_records = MagicMock(return_value=2)
+    n = d.add_images(["test.jpg", "test2.jpg"], n_threads=2, refresh_after=True)
+    assert n == 2
+    recs = d.insert_records.call_args.args[0]
+    assert [r["path"] for r in recs] == ["test.jpg", "test2.jpg"]
+    assert d.insert_records.call_args.kwargs == {"refresh_after": True}
+
+
+def test_add_images_metadata_broadcast_and_list():
+    """A dict broadcasts to all records; a list aligns per-image."""
+    d = _StubDriver()
+    recs = d._make_records(["test.jpg", "test2.jpg"], metadata={"t": 1})
+    assert [r["metadata"] for r in recs] == [{"t": 1}, {"t": 1}]
+
+    recs = d._make_records(["test.jpg", "test2.jpg"], metadata=[{"a": 1}, None])
+    assert recs[0]["metadata"] == {"a": 1}
+    assert "metadata" not in recs[1]
+
+    with pytest.raises(ValueError, match="metadata list"):
+        d._make_records(["test.jpg"], metadata=[{"a": 1}, {"b": 2}])
 
 
 def test_search_image_dedupes_and_sorts():
@@ -621,6 +659,62 @@ def test_es_delete_duplicates_call_args():
     es.delete.assert_called_once_with(index="images", id="b")
 
 
+def test_es_delete_image_removes_all_exact_matches():
+    """Unlike delete_duplicates, delete_image removes every exact-path hit."""
+    from image_match.elasticsearch_driver import SignatureES
+
+    es = MagicMock()
+    es.search.return_value = {
+        "hits": {
+            "hits": [
+                {"_id": "a", "_source": {"path": "p"}},
+                {"_id": "b", "_source": {"path": "p"}},
+                {"_id": "c", "_source": {"path": "p2"}},  # fuzzy hit, not exact
+                {"_id": "d", "_source": {}},  # legacy doc without path
+            ]
+        }
+    }
+    ses = SignatureES(es)
+    assert ses.delete_image("p") == 2
+    deleted = sorted(c.kwargs["id"] for c in es.delete.call_args_list)
+    assert deleted == ["a", "b"]
+    assert es.search.call_args.kwargs["size"] == 10000  # delete_duplicates_limit default
+
+    es.delete.reset_mock()
+    assert ses.delete_image("p", limit=3) == 2
+    assert es.search.call_args.kwargs["size"] == 3
+
+
+def test_es_insert_records_bulk():
+    """insert_records stamps timestamps and ships {index, _source} actions."""
+    from image_match.elasticsearch_driver import SignatureES
+
+    es = MagicMock()
+    fake_helpers = MagicMock()
+    fake_helpers.bulk.return_value = (2, [])
+    recs = [_rec("a.jpg"), _rec("b.jpg")]
+    with patch("image_match.elasticsearch_driver.helpers_module", return_value=fake_helpers):
+        assert SignatureES(es, index="idx").insert_records(recs, refresh_after=True) == 2
+
+    call = fake_helpers.bulk.call_args
+    assert call.args[0] is es
+    actions = call.args[1]
+    assert [a["_source"]["path"] for a in actions] == ["a.jpg", "b.jpg"]
+    assert all(a["_index"] == "idx" and "timestamp" in a["_source"] for a in actions)
+    assert call.kwargs == {"refresh": True}
+
+
+def test_helpers_module_picks_by_client():
+    """helpers_module selects es-py vs opensearch-py helpers by client module."""
+    from image_match.elasticsearch_driver import helpers_module
+
+    es_mod = pytest.importorskip("elasticsearch", reason="elasticsearch extra not installed")
+    os_mod = pytest.importorskip("opensearchpy", reason="opensearch extra not installed")
+
+    assert helpers_module(es_mod.Elasticsearch("http://localhost:1")).bulk is es_mod.helpers.bulk
+    assert helpers_module(os_mod.OpenSearch("http://localhost:1")).bulk is os_mod.helpers.bulk
+
+
 def test_format_hits_cutoff_boundary():
     """dist == cutoff must be excluded ('<' not '<=')."""
     from image_match.elasticsearch_driver import format_hits
@@ -921,6 +1015,30 @@ def test_mongo_insert_creates_indexes_once():
     coll.create_index.assert_not_called()  # already indexed
 
 
+def test_mongo_insert_records_and_delete_image():
+    """insert_records uses insert_many + stamps timestamps; delete_image uses
+    delete_many on the exact path."""
+    from image_match.mongodb_driver import SignatureMongo
+
+    coll = _mongo_collection(docs=[{"simple_word_0": 1, "simple_word_9": 2}])
+    ses = SignatureMongo(coll)
+    ses.index_names = ["simple_word_0", "simple_word_9"]
+
+    inserted = MagicMock()
+    inserted.inserted_ids = ["x", "y"]
+    coll.insert_many.return_value = inserted
+    recs = [_rec("a.jpg"), _rec("b.jpg")]
+    assert ses.insert_records(recs) == 2
+    sent = coll.insert_many.call_args.args[0]
+    assert [r["path"] for r in sent] == ["a.jpg", "b.jpg"]
+    assert all("timestamp" in r for r in sent)
+    assert coll.create_index.call_count == 2  # lazy index creation on first bulk
+
+    coll.delete_many.return_value = MagicMock(deleted_count=3)
+    assert ses.delete_image("p") == 3
+    coll.delete_many.assert_called_once_with({"path": "p"})
+
+
 def test_mongo_word_query_queue():
     from image_match.mongodb_driver import SignatureMongo
 
@@ -1108,6 +1226,40 @@ async def test_async_es_add_and_search_image():
     r = await ses.search_image("test.jpg")
     assert len(r) == 1
     assert r[0]["dist"] == 0.0
+
+
+async def test_async_es_insert_records_and_delete_image():
+    pytest.importorskip("aiohttp", reason="async extras not installed")
+    from image_match.elasticsearch_async_driver import AsyncSignatureES
+
+    es = _async_es()
+    ses = AsyncSignatureES(es, index="idx")
+
+    fake_helpers = MagicMock()
+    fake_helpers.async_bulk = AsyncMock(return_value=(2, []))
+    with patch("image_match.elasticsearch_async_driver.helpers_module", return_value=fake_helpers):
+        assert await ses.insert_records([_rec("a.jpg"), _rec("b.jpg")], refresh_after=True) == 2
+    call = fake_helpers.async_bulk.await_args
+    actions = call.args[1]
+    assert [a["_source"]["path"] for a in actions] == ["a.jpg", "b.jpg"]
+    assert all(a["_index"] == "idx" and "timestamp" in a["_source"] for a in actions)
+    assert call.kwargs == {"refresh": True}
+
+    # add_images offloads record generation and forwards kwargs
+    fake_helpers.async_bulk.reset_mock()
+    with patch("image_match.elasticsearch_async_driver.helpers_module", return_value=fake_helpers):
+        n = await ses.add_images(["test.jpg", "test2.jpg"], metadata={"t": 1})
+    assert n == 2
+    actions = fake_helpers.async_bulk.await_args.args[1]
+    assert all(a["_source"]["metadata"] == {"t": 1} for a in actions)
+
+    es.search = AsyncMock(
+        return_value={
+            "hits": {"hits": [{"_id": "a", "_source": {"path": "p"}}, {"_id": "b", "_source": {"path": "p"}}, {"_id": "c", "_source": {"path": "other"}}]}
+        }
+    )
+    assert await ses.delete_image("p") == 2
+    assert es.delete.await_count == 2
 
 
 async def test_async_opensearch_params():

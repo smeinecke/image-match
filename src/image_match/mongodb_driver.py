@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from multiprocessing import cpu_count
 from queue import Empty, Queue
 from threading import Thread
@@ -192,6 +193,41 @@ class SignatureMongo(SignatureDatabaseBase):
         # if the collection has no indexes (except possibly '_id'), build them
         if len(self.collection.index_information()) <= 1:
             self.index_collection()
+
+    @override
+    def insert_records(self, records: list[dict[str, Any]], **kwargs: Any) -> int:
+        """Bulk-insert pre-made records via insert_many (see add_images).
+
+        Creates the word indexes on first insert, like insert_single_record.
+
+        Args:
+            records (list[dict]): image records in the format returned by make_record
+            **kwargs: accepted for API parity, ignored
+
+        Returns:
+            the number of inserted records
+
+        """
+        for rec in records:
+            rec["timestamp"] = datetime.now()
+        result = self.collection.insert_many(records)
+
+        if len(self.collection.index_information()) <= 1:
+            self.index_collection()
+
+        return len(result.inserted_ids)
+
+    def delete_image(self, path: str) -> int:
+        """Delete all records whose path equals `path`.
+
+        Args:
+            path (string): path value to remove entirely from the collection
+
+        Returns:
+            the number of documents deleted
+
+        """
+        return self.collection.delete_many({"path": path}).deleted_count
 
     def index_collection(self) -> None:
         """Index a collection on words."""

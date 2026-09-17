@@ -88,6 +88,28 @@ async def test_duplicate_removal(ases):
     assert len(r) == 1
 
 
+async def test_add_images_bulk_and_delete_image(ases):
+    """async_bulk insert + delete_image removes every copy of a path."""
+    n = await ases.add_images(["test1.jpg", "test2.jpg", "test_diff.jpg"], metadata={"batch": "bulk"}, refresh_after=True)
+    assert n == 3
+
+    r = await ases.search_image("test1.jpg")
+    # test_diff is a near-duplicate of test1, test2 is just under the cutoff
+    assert len(r) == 3
+    assert all(hit["metadata"]["batch"] == "bulk" for hit in r)
+
+    assert await ases.delete_image("test_diff.jpg") == 1
+    await asyncio.sleep(1)
+    r = await ases.search_image("test_diff.jpg")
+    assert all(hit["path"] != "test_diff.jpg" for hit in r)
+
+    await ases.add_image("test1.jpg", refresh_after=True)
+    assert await ases.delete_image("test1.jpg") == 2
+    await asyncio.sleep(1)
+    r = await ases.search_image("test1.jpg")
+    assert [hit["path"] for hit in r] == ["test2.jpg"]
+
+
 async def test_all_orientations(ases):
     from PIL import Image
 

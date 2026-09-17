@@ -126,6 +126,47 @@ class SignatureES(SignatureDatabaseBase):
         for id_tag in duplicate_ids(self._path_hits(path, limit), path):
             self.es.delete(index=self.index, id=id_tag)
 
+    def delete_image(self, path: str, limit: int | None = None) -> int:
+        """Delete all records whose stored path exactly equals `path`.
+
+        The path match query is fuzzy, so hits are filtered to exact matches
+        before deletion — documents with merely similar paths are kept.
+
+        Args:
+            path (string): path value to remove entirely from the index
+            limit (Optional[int]): maximum number of candidates to scan;
+                defaults to the instance's delete_duplicates_limit (default 10000)
+
+        Returns:
+            the number of documents deleted
+
+        """
+        if limit is None:
+            limit = self.delete_duplicates_limit
+
+        ids = exact_path_ids(self._path_hits(path, limit), path)
+        for id_tag in ids:
+            self.es.delete(index=self.index, id=id_tag)
+        return len(ids)
+
+    def insert_records(self, records: list[dict[str, Any]], refresh_after: bool = False, **kwargs: Any) -> int:
+        """Bulk-insert pre-made records (see add_images).
+
+        Args:
+            records (list[dict]): image records in the format returned by make_record
+            refresh_after (Optional[boolean]): refresh the index after the bulk
+                request, making records searchable immediately (default False)
+            **kwargs: extra keyword arguments forwarded to helpers.bulk
+
+        Returns:
+            the number of successfully indexed records
+
+        """
+        for rec in records:
+            rec["timestamp"] = datetime.now()
+        ok, _ = helpers_module(self.es).bulk(self.es, [{"_index": self.index, "_source": rec} for rec in records], refresh=refresh_after, **kwargs)
+        return ok
+
     def _path_hits(self, path: str, limit: int) -> list[dict[str, Any]]:
         """Search for documents whose path field fuzzy-matches `path`."""
         return self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, size=limit)["hits"]["hits"]
@@ -172,13 +213,30 @@ def build_word_query(
     return body
 
 
-def duplicate_ids(hits: list[dict[str, Any]], path: str) -> list[Any]:
-    """Return _ids of hits whose stored path exactly equals `path`, minus the first.
+def exact_path_ids(hits: list[dict[str, Any]], path: str) -> list[Any]:
+    """Return _ids of hits whose stored path exactly equals `path`.
 
-    Fuzzy `match` on path returns near-misses; delete_duplicates keeps the
-    first exact hit and deletes the rest.
+    The `match` query on path is fuzzy, so callers filter to exact matches.
     """
-    return [item["_id"] for item in hits if item["_source"].get("path") == path][1:]
+    return [item["_id"] for item in hits if item["_source"].get("path") == path]
+
+
+def duplicate_ids(hits: list[dict[str, Any]], path: str) -> list[Any]:
+    """Return _ids of exact-path hits minus the first — the duplicates to delete."""
+    return exact_path_ids(hits, path)[1:]
+
+
+def helpers_module(client: Any) -> Any:
+    """Pick the helpers package matching the client's library.
+
+    elasticsearch-py and opensearch-py both expose bulk/async_bulk/scan at
+    helpers top level; importing lazily keeps the backend extras optional.
+    """
+    if type(client).__module__.startswith("opensearchpy"):
+        from opensearchpy import helpers
+    else:
+        from elasticsearch import helpers
+    return helpers
 
 
 def format_hits(hits: list[dict[str, Any]], signature: np.ndarray, distance_cutoff: float) -> list[dict[str, Any]]:

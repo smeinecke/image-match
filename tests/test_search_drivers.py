@@ -180,6 +180,30 @@ def test_duplicate_removal_with_limit(ses):
     assert len(r) == 8
 
 
+def test_add_images_bulk_and_delete_image(ses):
+    """Bulk-insert several images, search, then remove one entirely."""
+    n = ses.add_images(["test1.jpg", "test2.jpg", "test_diff.jpg"], metadata={"batch": "bulk"}, refresh_after=True)
+    assert n == 3
+
+    r = ses.search_image("test1.jpg")
+    # test_diff is a near-duplicate of test1, test2 is just under the cutoff
+    assert len(r) == 3
+    assert all(hit["metadata"]["batch"] == "bulk" for hit in r)
+
+    assert ses.delete_image("test_diff.jpg") == 1
+    sleep(1)
+    # remix is close enough to match the Mona Lisas — only its own record is gone
+    r = ses.search_image("test_diff.jpg")
+    assert all(hit["path"] != "test_diff.jpg" for hit in r)
+
+    # delete_image removes *all* copies of a path (test1 now exists twice)
+    ses.add_image("test1.jpg", refresh_after=True)
+    assert ses.delete_image("test1.jpg") == 2
+    sleep(1)
+    r = ses.search_image("test1.jpg")
+    assert [hit["path"] for hit in r] == ["test2.jpg"]
+
+
 def test_pre_filter_list(ses):
     """pre_filter accepts a list of clauses (bool/filter list semantics)."""
     ses.add_image("test1.jpg", metadata={"tenant_id": "foo"}, refresh_after=True)

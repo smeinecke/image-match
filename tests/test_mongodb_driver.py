@@ -39,6 +39,20 @@ def test_add_image_by_url(ses):
     assert True
 
 
+def test_add_images_bulk_and_delete_image(ses):
+    """Bulk-insert via insert_many, then remove a path entirely."""
+    n = ses.add_images(["test1.jpg", "test2.jpg"], metadata={"batch": "bulk"})
+    assert n == 2
+    assert ses.collection.count_documents({}) == 2
+
+    r = ses.search_image("test1.jpg")
+    assert len(r) == 2  # test1 + test2 are the same image
+
+    assert ses.delete_image("test1.jpg") == 1
+    r = ses.search_image("test1.jpg")
+    assert [hit["path"] for hit in r] == ["test2.jpg"]
+
+
 def test_add_image_by_path(ses):
     ses.add_image("test1.jpg")
     assert True
