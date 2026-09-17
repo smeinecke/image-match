@@ -61,4 +61,5 @@ docs/_build/
 target/
 
 *.jpg
-!docs/source/_images/*.jpg.playwright-mcp/
+!docs/source/_images/*.jpg
+.playwright-mcp/
