@@ -1,8 +1,30 @@
 Other database backends
 =======================
-Though we designed ``image-match`` with Elasticsearch in mind, other database
-backends are possible. For demonstration purposes we include also a `MongoDB`_
-driver:
+Database backend client libraries are optional extras -- install only the
+one you need:
+
+.. code-block:: bash
+
+    $ pip install "image-match[elasticsearch]"   # Elasticsearch driver
+    $ pip install "image-match[opensearch]"      # OpenSearch driver
+    $ pip install "image-match[mongo]"           # MongoDB driver
+
+OpenSearch
+----------
+``SignatureOpenSearch`` shares the record format and query DSL with the
+Elasticsearch driver; only the client library differs (`OpenSearch`_ is
+API-compatible with Elasticsearch 7.x for the operations used here):
+
+.. code-block:: python
+
+    from image_match.opensearch_driver import SignatureOpenSearch
+    from opensearchpy import OpenSearch
+
+    ses = SignatureOpenSearch(OpenSearch("http://localhost:9200"))
+
+MongoDB
+-------
+For demonstration purposes we include also a `MongoDB`_ driver:
 
 .. code-block:: python
 
@@ -22,7 +44,7 @@ as possible.  To write your own database backend, you can inherit from the
 
 .. code-block:: python
 
-    from signature_database_base import SignatureDatabaseBase
+    from image_match.signature_database_base import SignatureDatabaseBase
     # other relevant imports
 
     class MySignatureBackend(SignatureDatabaseBase):
@@ -59,4 +81,5 @@ included database drivers for guidelines.
 
 
 .. _MongoDB: https://www.mongodb.org/
+.. _OpenSearch: https://opensearch.org/
 .. _the search algorithm: http://www.cs.cmu.edu/~hcwong/Pdfs/icip02.ps

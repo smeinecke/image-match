@@ -36,13 +36,16 @@ test-all: test-cov
 
 # Integration test helpers
 db-up:
-	docker compose up -d elasticsearch mongodb
+	docker compose up -d elasticsearch mongodb opensearch
 	@echo "Waiting for Elasticsearch to be ready..."
 	@bash -c 'for i in $$(seq 1 90); do curl -sf http://localhost:9200/_cluster/health >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1' || { echo "Timeout waiting for Elasticsearch"; exit 1; }
 	@echo "Elasticsearch is ready!"
 	@echo "Waiting for MongoDB to be ready..."
 	@bash -c 'for i in $$(seq 1 30); do nc -z localhost 27017 2>/dev/null && exit 0; sleep 1; done; exit 1' || { echo "Timeout waiting for MongoDB"; exit 1; }
 	@echo "MongoDB is ready!"
+	@echo "Waiting for OpenSearch to be ready..."
+	@bash -c 'for i in $$(seq 1 90); do curl -sf http://localhost:9201/_cluster/health >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1' || { echo "Timeout waiting for OpenSearch"; exit 1; }
+	@echo "OpenSearch is ready!"
 
 db-down:
 	docker compose down

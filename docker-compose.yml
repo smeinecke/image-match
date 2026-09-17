@@ -31,6 +31,18 @@ services:
     ports:
       - "27017:27017"
 
+  opensearch:
+    image: opensearchproject/opensearch:2
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - cluster.name=opensearch-docker
+    ports:
+      - "9201:9200"
+
   bdocs:
     build:
       context: .

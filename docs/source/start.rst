@@ -21,8 +21,8 @@ Elasticsearch
 If you just want to generate and compare image signatures, you can skip this
 step. If you want to search over a corpus of millions or billions of image
 signatures, you will need a database backend. We built ``image_match`` around
-`Elasticsearch`_. See `download and installation instructions <https://www.elastic.co/downloads/elasticsearch>`_.  We're using
-``Elasticsearch 2.2.1`` in these examples.
+`Elasticsearch`_ (OpenSearch and MongoDB are also supported). See `download and installation instructions <https://www.elastic.co/downloads/elasticsearch>`_.  We're using
+``Elasticsearch 7.x`` in these examples.
 
 
 Install image-match
@@ -36,7 +36,10 @@ Install with pip
 
     $ pip install numpy
     $ pip install scipy
-    $ pip install image_match
+    $ pip install "image-match[elasticsearch]"   # or [opensearch], [mongo]
+
+The backend client libraries are optional extras; install only the one you
+use. See :doc:`backends` for details.
 
 Build from source
 ^^^^^^^^^^^^^^^^^
