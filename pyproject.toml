@@ -8,7 +8,8 @@ dynamic = ["version"]
 description = "image_match is a simple package for finding approximate image matches from a corpus."
 readme = "README.md"
 requires-python = ">=3.13"
-license = { text = "Apache License 2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSES.md"]
 authors = [
     { name = "Ryan Henderson", email = "ryan@bigchaindb.com" },
 ]
@@ -20,7 +21,6 @@ classifiers = [
     "Topic :: Database :: Database Engines/Servers",
     "Topic :: Software Development",
     "Natural Language :: English",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
     "Operating System :: MacOS :: MacOS X",
@@ -80,20 +80,22 @@ dev = [
 ]
 
 [tool.hatch.version]
-path = "image_match/__init__.py"
+path = "src/image_match/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["image_match"]
+packages = ["src/image_match"]
 
 [tool.pytest.ini_options]
+addopts = "--strict-markers"
 testpaths = ["tests"]
 norecursedirs = [".*", "*.egg", "*.egg-info", "env*", "devenv*", "docs"]
 markers = [
-    "integration: marks tests that need a running Elasticsearch/MongoDB",
+    "integration: marks tests that need running Elasticsearch/OpenSearch/MongoDB services",
 ]
 
 [tool.ruff]
 exclude = ["docs", "build", "dist", "*.egg-info", ".venv"]
+target-version = "py313"
 line-length = 160
 indent-width = 4
 
@@ -109,10 +111,10 @@ explicit-preview-rules = true
 extend-select = [
     "I",
 ]
-select = ["E9", "F82", "D", "ANN"]
+select = ["E9", "F82", "D", "ANN", "UP", "C4", "SIM", "RUF"]
 # D200/D205/D400/D401/D415: docstring style conventions relaxed for legacy docstrings
 # ANN401: Any is legitimate for *args/**kwargs pass-throughs to driver backends
-ignore = ["D203", "D213", "D100", "F821", "D200", "D205", "D400", "D401", "D415", "ANN401"]
+ignore = ["D203", "D213", "D100", "D200", "D205", "D400", "D401", "D415", "ANN401"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "ANN"]

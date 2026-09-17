@@ -14,14 +14,14 @@ except ImportError:
     svg2png = None
 
 # accepted inputs anywhere an image can be loaded from
-ImageInput = str | os.PathLike | bytes | np.ndarray
+type ImageInput = str | os.PathLike | bytes | np.ndarray
 
 
 class CorruptImageError(RuntimeError):
     """Raised when image data cannot be decoded."""
 
 
-class ImageSignature(object):
+class ImageSignature:
     """Image signature generator.
 
     Based on the method of Goldberg, et al. Available at http://www.cs.cmu.edu/~hcwong/Pdfs/icip02.ps
@@ -63,8 +63,8 @@ class ImageSignature(object):
         # check inputs
         assert crop_percentiles is None or len(crop_percentiles) == 2, "crop_percentiles should be a two-value tuple, or None"
         if crop_percentiles is not None:
-            assert crop_percentiles[0] >= 0, "Lower crop_percentiles limit should be > 0 (%r given)" % crop_percentiles[0]
-            assert crop_percentiles[1] <= 100, "Upper crop_percentiles limit should be < 100 (%r given)" % crop_percentiles[1]
+            assert crop_percentiles[0] >= 0, f"Lower crop_percentiles limit should be > 0 ({crop_percentiles[0]!r} given)"
+            assert crop_percentiles[1] <= 100, f"Upper crop_percentiles limit should be < 100 ({crop_percentiles[1]!r} given)"
             assert crop_percentiles[0] < crop_percentiles[1], "Upper crop_percentile limit should be greater than lower limit."
             self.lower_percentile = crop_percentiles[0]
             self.upper_percentile = crop_percentiles[1]
@@ -75,12 +75,12 @@ class ImageSignature(object):
             self.upper_percentile = 100
 
         assert type(n) is int, "n should be an integer > 1"
-        assert n > 1, "n should be greater than 1 (%r given)" % n
+        assert n > 1, f"n should be greater than 1 ({n!r} given)"
         self.n = n
 
         assert type(P) is int or P is None, "P should be an integer >= 1, or None"
         if P is not None:
-            assert P >= 1, "P should be greater than 0 (%r given)" % P
+            assert P >= 1, f"P should be greater than 0 ({P!r} given)"
         self.P = P
 
         assert type(diagonal_neighbors) is bool, "diagonal_neighbors should be boolean"
@@ -91,11 +91,11 @@ class ImageSignature(object):
         self.fix_ratio = fix_ratio
 
         assert type(identical_tolerance) is float or type(identical_tolerance) is int, "identical_tolerance should be a number between 1 and 0"
-        assert 0.0 <= identical_tolerance <= 1.0, "identical_tolerance should be greater than zero and less than one (%r given)" % identical_tolerance
+        assert 0.0 <= identical_tolerance <= 1.0, f"identical_tolerance should be greater than zero and less than one ({identical_tolerance!r} given)"
         self.identical_tolerance = identical_tolerance
 
         assert type(n_levels) is int, "n_levels should be an integer"
-        assert n_levels > 0, "n_levels should be > 0 (%r given)" % n_levels
+        assert n_levels > 0, f"n_levels should be > 0 ({n_levels!r} given)"
         self.n_levels = n_levels
 
         self.handle_mpo = True
@@ -225,7 +225,7 @@ class ImageSignature(object):
                 raise TypeError("bytestream=True requires raw image bytes")
             try:
                 img = Image.open(BytesIO(image_or_path))
-            except IOError:
+            except OSError:
                 # could be an svg, attempt to convert
                 if svg2png is None:
                     raise CorruptImageError()
@@ -252,7 +252,7 @@ class ImageSignature(object):
             try:
                 img = Image.open(image_or_path)
                 arr = np.array(img.convert("RGB"))
-            except IOError:
+            except OSError:
                 # try again due to PIL weirdness
                 return imread(image_or_path, as_gray=True)
             return rgb2gray(arr)

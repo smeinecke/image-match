@@ -1,9 +1,15 @@
 .eggs
 .git
+.github
 .ropeproject
 .editorconfig
 .gitignore
 .venv
 __pycache__
+.pytest_cache
+.ruff_cache
 Dockerfile
-LICENSES.md
+docs
+tests
+*.jpg
+coverage.xml

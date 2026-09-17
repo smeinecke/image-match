@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, override
 
 from .elasticsearch_driver import SignatureES
 
@@ -43,8 +43,8 @@ class SignatureOpenSearch(SignatureES):
         >>> ses.search_image('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg')
         [
          {'dist': 0.0,
-          'id': u'AVM37nMg0osmmAxpPvx6',
-          'path': u'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg',
+          'id': 'AVM37nMg0osmmAxpPvx6',
+          'path': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg',
           'score': 0.28797293}
         ]
 
@@ -64,8 +64,9 @@ class SignatureOpenSearch(SignatureES):
         """
         # the OpenSearch client is API-identical to the Elasticsearch client
         # for the operations used here; the cast is purely for type checkers
-        super(SignatureOpenSearch, self).__init__(cast("Elasticsearch", es), index=index, timeout=timeout, size=size, *args, **kwargs)
+        super().__init__(cast("Elasticsearch", es), index=index, timeout=timeout, size=size, *args, **kwargs)
 
+    @override
     def _search(self, body: dict) -> Any:
         # opensearch-py reserves the 'timeout'/'request_timeout' params for the
         # HTTP request timeout, so the ES-style query-level timeout string can't
@@ -76,6 +77,7 @@ class SignatureOpenSearch(SignatureES):
             params={"size": self.size, "request_timeout": _parse_duration(self.timeout)},
         )
 
+    @override
     def insert_single_record(self, rec: dict, refresh_after: bool = False) -> None:
         """Insert an image record.
 

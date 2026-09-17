@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 import numpy as np
 
@@ -34,8 +34,8 @@ class SignatureES(SignatureDatabaseBase):
             >>> ses.search_image('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg')
             [
              {'dist': 0.0,
-              'id': u'AVM37nMg0osmmAxpPvx6',
-              'path': u'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg',
+              'id': 'AVM37nMg0osmmAxpPvx6',
+              'path': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg',
               'score': 0.28797293}
             ]
 
@@ -45,8 +45,9 @@ class SignatureES(SignatureDatabaseBase):
         self.timeout = timeout
         self.size = size
 
-        super(SignatureES, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
+    @override
     def search_single_record(self, rec: dict, pre_filter: PreFilter = None) -> list[dict]:
         """Search for a matching image record.
 
@@ -97,6 +98,7 @@ class SignatureES(SignatureDatabaseBase):
         """
         return self.es.search(index=self.index, body=body, size=self.size, timeout=self.timeout)
 
+    @override
     def insert_single_record(self, rec: dict, refresh_after: bool = False) -> None:
         """Insert an image record.
 

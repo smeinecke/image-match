@@ -10,10 +10,10 @@ from image_match.goldberg import ImageInput, ImageSignature
 
 # a database filter clause: dict for MongoDB, dict or list of clauses for
 # Elasticsearch (e.g. {"term": {"metadata.tenant_id": "foo"}})
-PreFilter = dict | list | None
+type PreFilter = dict | list | None
 
 
-class SignatureDatabaseBase(object):
+class SignatureDatabaseBase:
     """Base class for storing and searching image signatures in a database
 
     Note:
@@ -70,15 +70,15 @@ class SignatureDatabaseBase(object):
 
             [
              {'dist': 0.069116439263706961,
-              'id': u'AVM37oZq0osmmAxpPvx7',
-              'path': u'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg'},
+              'id': 'AVM37oZq0osmmAxpPvx7',
+              'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg'},
              {'dist': 0.22484320805049718,
-              'id': u'AVM37nMg0osmmAxpPvx6',
-              'path': u'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg'},
+              'id': 'AVM37nMg0osmmAxpPvx6',
+              'path': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg'},
              {'dist': 0.42529792112113302,
-              'id': u'AVM37p530osmmAxpPvx9',
+              'id': 'AVM37p530osmmAxpPvx9',
               'metadata': {...},
-              'path': u'https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg'}
+              'path': 'https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg'}
             ]
 
             You can return any fields you like, but must include at least dist and id. Duplicate entries are ok,
@@ -195,7 +195,7 @@ class SignatureDatabaseBase(object):
         if not isinstance(distance_cutoff, (int, float)):
             raise TypeError("distance_cutoff should be a float")
         if distance_cutoff < 0.0:
-            raise ValueError("distance_cutoff should be > 0 (got %r)" % distance_cutoff)
+            raise ValueError(f"distance_cutoff should be > 0 (got {distance_cutoff!r})")
 
         self.distance_cutoff = float(distance_cutoff)
 
@@ -251,14 +251,14 @@ class SignatureDatabaseBase(object):
 
             [
              {'dist': 0.069116439263706961,
-              'id': u'AVM37oZq0osmmAxpPvx7',
-              'path': u'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg'},
+              'id': 'AVM37oZq0osmmAxpPvx7',
+              'path': 'https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg'},
              {'dist': 0.22484320805049718,
-              'id': u'AVM37nMg0osmmAxpPvx6',
-              'path': u'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg'},
+              'id': 'AVM37nMg0osmmAxpPvx6',
+              'path': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg'},
              {'dist': 0.42529792112113302,
-              'id': u'AVM37p530osmmAxpPvx9',
-              'path': u'https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg'}
+              'id': 'AVM37p530osmmAxpPvx9',
+              'path': 'https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg'}
             ]
 
         """
@@ -363,10 +363,7 @@ def make_record(
     """
     record: dict[str, Any] = {"path": path}
 
-    if img is not None:
-        signature = gis.generate_signature(img, bytestream=bytestream)
-    else:
-        signature = gis.generate_signature(path)
+    signature = gis.generate_signature(img if img is not None else path, bytestream=bytestream)
 
     record["signature"] = signature.tolist()
 

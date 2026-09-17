@@ -3,7 +3,7 @@ from __future__ import annotations
 from multiprocessing import cpu_count
 from queue import Empty, Queue
 from threading import Thread
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 import numpy as np
 
@@ -34,8 +34,8 @@ class SignatureMongo(SignatureDatabaseBase):
             >>> ses.search_image('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg')
             [
              {'dist': 0.0,
-              'id': u'AVM37nMg0osmmAxpPvx7',
-              'path': u'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg',
+              'id': 'AVM37nMg0osmmAxpPvx7',
+              'path': 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg',
               'score': 0.28797293}
             ]
 
@@ -45,10 +45,11 @@ class SignatureMongo(SignatureDatabaseBase):
         # Extract index fields, if any exist yet
         if self.collection.count_documents({}) > 0:
             doc = self.collection.find_one({}) or {}
-            self.index_names = [field for field in doc.keys() if field.find("simple") > -1]
+            self.index_names = [field for field in doc if "simple" in field]
 
-        super(SignatureMongo, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
+    @override
     def search_single_record(
         self,
         rec: dict,
@@ -91,7 +92,7 @@ class SignatureMongo(SignatureDatabaseBase):
         queue_empty = False
 
         # create an empty queue for results
-        results_q = Queue()
+        results_q: Queue = Queue()
 
         # create a set of unique results, using MongoDB _id field
         unique_results = set()
@@ -133,7 +134,7 @@ class SignatureMongo(SignatureDatabaseBase):
                 if results == "STOP":
                     num_workers -= 1
                 else:
-                    for key in results.keys():
+                    for key in results:
                         if key not in unique_results:
                             unique_results.add(key)
                             match_list.append(results[key])
@@ -167,9 +168,9 @@ class SignatureMongo(SignatureDatabaseBase):
         # this instance was created; try to pick the fields up lazily
         if not self.index_names:
             doc = self.collection.find_one({}) or {}
-            self.index_names = [field for field in doc.keys() if field.find("simple") > -1]
+            self.index_names = [field for field in doc if "simple" in field]
 
-        initial_q = Queue()
+        initial_q: Queue = Queue()
         for field_name in self.index_names[:word_limit]:
             # a field may be absent from rec if the index was built with a
             # different N (number of words); skip instead of raising KeyError
@@ -180,6 +181,7 @@ class SignatureMongo(SignatureDatabaseBase):
         initial_q.put("STOP")
         return initial_q
 
+    @override
     def insert_single_record(self, rec: dict) -> None:
         """Insert an image record, creating the word indexes if needed.
 
@@ -197,7 +199,7 @@ class SignatureMongo(SignatureDatabaseBase):
         """Index a collection on words."""
         # Index on words
         doc = self.collection.find_one({}) or {}
-        self.index_names = [field for field in doc.keys() if field.find("simple") > -1]
+        self.index_names = [field for field in doc if "simple" in field]
         for name in self.index_names:
             self.collection.create_index(name)
 
