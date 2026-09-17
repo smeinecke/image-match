@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from io import BytesIO
-from typing import Union
 
 import numpy as np
 from PIL import Image
@@ -15,7 +14,7 @@ except ImportError:
     svg2png = None
 
 # accepted inputs anywhere an image can be loaded from
-ImageInput = Union[str, os.PathLike, bytes, np.ndarray]
+ImageInput = str | os.PathLike | bytes | np.ndarray
 
 
 class CorruptImageError(RuntimeError):

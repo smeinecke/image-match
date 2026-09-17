@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from itertools import product
 from operator import itemgetter
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 
@@ -10,7 +10,7 @@ from image_match.goldberg import ImageInput, ImageSignature
 
 # a database filter clause: dict for MongoDB, dict or list of clauses for
 # Elasticsearch (e.g. {"term": {"metadata.tenant_id": "foo"}})
-PreFilter = Optional[Union[dict, list]]
+PreFilter = dict | list | None
 
 
 class SignatureDatabaseBase(object):
