@@ -15,7 +15,9 @@ OpenSearch
 ----------
 ``SignatureOpenSearch`` shares the record format and query DSL with the
 Elasticsearch driver; only the client library differs (`OpenSearch`_ is
-API-compatible with Elasticsearch 7.x for the operations used here):
+API-compatible with Elasticsearch 7.x for the operations used here). Both
+OpenSearch 2.x and 3.x servers are supported — the ``opensearch`` extra pulls
+``opensearch-py>=2.4``, whose 3.x client line covers server versions 1.x–3.x:
 
 .. code-block:: python
 
@@ -83,9 +85,19 @@ reversible (see :doc:`migration`).
 The knn candidates are rescored client-side with the usual normalized
 distance, so ``dist``/``distance_cutoff`` semantics are unchanged. The
 difference is recall: HNSW is *approximate* — ``size`` controls the candidate
-count ``k``; raise it for better recall on large indexes. Supported engines
-are ``lucene`` (default, no native dependency) and ``faiss``/``nmslib`` where
-available, via ``knn_index_body(..., engine=..., space_type=...)``.
+count ``k``; raise it for better recall on large indexes.
+
+Engine and data-type choices via ``knn_index_body(..., engine=..., space_type=..., data_type=...)``:
+
+* ``engine``: ``lucene`` (default, no native dependency) or ``faiss``.
+  ``nmslib`` is deprecated and **rejected for new indexes on OpenSearch 3**
+  — only use it for OpenSearch 2 targets.
+* ``data_type``: ``float`` (default) or ``byte``. Signatures are int8, so
+  ``byte`` is lossless and ~4x smaller in memory (requires OpenSearch ≥ 2.9).
+
+Both OpenSearch 2.x and 3.x accept the mapping ``knn_index_body()`` produces
+— method parameters live in the field mapping, the style OpenSearch 3
+requires (index-level ``knn.algo_param.*`` settings were removed in 3.0).
 
 MongoDB
 -------

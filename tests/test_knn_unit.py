@@ -18,12 +18,14 @@ def test_knn_index_body():
     sig = body["mappings"]["properties"]["signature"]
     assert sig["type"] == "knn_vector"
     assert sig["dimension"] == 648
+    assert sig["data_type"] == "float"
     assert sig["method"]["engine"] == "lucene"
     assert sig["method"]["space_type"] == "l2"
 
-    custom = knn_index_body(64, engine="faiss", space_type="cosinesimil")
+    custom = knn_index_body(64, engine="faiss", space_type="cosinesimil", data_type="byte")
     sig = custom["mappings"]["properties"]["signature"]
     assert sig["dimension"] == 64
+    assert sig["data_type"] == "byte"
     assert sig["method"]["engine"] == "faiss"
 
 
@@ -167,3 +169,37 @@ def test_migrate_index_copies_and_validates():
     assert captured["actions"][0]["_id"] == "1"
     target.indices.create.assert_called_once()
     assert target.indices.create.call_args.kwargs["index"] == "dst"
+
+
+def test_detect_server_parses_major_version():
+    mod = _load_migration_tool()
+    client = MagicMock()
+    client.info.return_value = {"version": {"distribution": "opensearch", "number": "3.2.1"}}
+    assert mod.detect_server(client) == ("opensearch", 3)
+
+    client.info.return_value = {"version": {"number": "7.17.13"}}
+    assert mod.detect_server(client) == ("elasticsearch", 7)
+
+    client.info.return_value = {}
+    assert mod.detect_server(client) == ("elasticsearch", None)
+
+
+def test_migrate_index_rejects_nmslib_on_opensearch3():
+    mod = _load_migration_tool()
+
+    source = MagicMock()
+    source.__class__ = type("FakeES", (), {"__module__": "elasticsearch.client"})
+    target = MagicMock()
+    target.__class__ = type("FakeOS", (), {"__module__": "opensearchpy.client"})
+    target.indices.exists.return_value = False
+    target.info.return_value = {"version": {"distribution": "opensearch", "number": "3.0.0"}}
+
+    with pytest.raises(ValueError, match="nmslib"):
+        mod.migrate_index(source, target, "src", "dst", engine="nmslib")
+    target.indices.create.assert_not_called()
+
+    # nmslib is still allowed when the target is OpenSearch 2
+    target.info.return_value = {"version": {"distribution": "opensearch", "number": "2.19.0"}}
+    mod._helpers_for = lambda c: (lambda *a, **k: iter([]), lambda c, a: (0, []))
+    mod.migrate_index(source, target, "src", "dst", engine="nmslib")
+    target.indices.create.assert_called_once()

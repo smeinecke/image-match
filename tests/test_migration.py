@@ -34,6 +34,11 @@ def os_backend():
 
 
 @pytest.fixture
+def os3_backend():
+    return make_backend("opensearch3")
+
+
+@pytest.fixture
 def es_backend():
     return make_backend("elasticsearch")
 
@@ -53,11 +58,16 @@ def _teardown(client, name, exc):
         client.indices.delete(index=name)
 
 
-def test_detect_server_type(es_backend, os_backend):
+def test_detect_server_type(es_backend, os_backend, os3_backend):
     wait_until_ready(es_backend.client, "elasticsearch")
     wait_until_ready(os_backend.client, "opensearch")
+    wait_until_ready(os3_backend.client, "opensearch3")
     assert migrate_tool.detect_server_type(es_backend.client) == "elasticsearch"
     assert migrate_tool.detect_server_type(os_backend.client) == "opensearch"
+    assert migrate_tool.detect_server_type(os3_backend.client) == "opensearch"
+    # version detection: OS2 cluster reports major 2, OS3 reports 3
+    assert migrate_tool.detect_server(os_backend.client) == ("opensearch", 2)
+    assert migrate_tool.detect_server(os3_backend.client) == ("opensearch", 3)
 
 
 def test_migrate_es_to_os_knn(es_backend, os_backend, requires_download):
@@ -133,6 +143,50 @@ def test_migrate_skips_bad_dimensions(os_backend, requires_download):
     finally:
         _teardown(os_backend.client, src, os_backend.exc)
         _teardown(os_backend.client, dst, os_backend.exc)
+
+
+def test_migrate_os2_to_os3_knn(os_backend, os3_backend, requires_download):
+    """OS2 word index -> OS3 knn index; knn driver finds the golden match."""
+    wait_until_ready(os_backend.client, "opensearch")
+    wait_until_ready(os3_backend.client, "opensearch3")
+
+    src = _seed_word_index(os_backend)
+    dst = random_index_name("test_mig_os3")
+
+    try:
+        stats = migrate_tool.migrate_index(os_backend.client, os3_backend.client, src, dst, dimension=DIMENSION)
+        assert stats["indexed"] == 2
+        assert migrate_tool.verify_index(os3_backend.client, dst, DIMENSION)
+
+        os3_backend.client.indices.refresh(index=dst)
+
+        from image_match.opensearch_knn_driver import SignatureOpenSearchKNN
+
+        r = SignatureOpenSearchKNN(os3_backend.client, index=dst).search_image("test1.jpg")
+        assert r[0]["path"] == "test1.jpg"
+        assert r[0]["dist"] == 0.0
+        assert r[-1]["dist"] == 0.42412912927363733
+    finally:
+        _teardown(os_backend.client, src, os_backend.exc)
+        _teardown(os3_backend.client, dst, os3_backend.exc)
+
+
+def test_migrate_nmslib_rejected_on_os3(os_backend, os3_backend, requires_download):
+    """nmslib is blocked for new indexes on OpenSearch 3 — fail fast."""
+    wait_until_ready(os_backend.client, "opensearch")
+    wait_until_ready(os3_backend.client, "opensearch3")
+
+    src = _seed_word_index(os_backend, images=("test1.jpg",))
+    dst = random_index_name("test_mig_os3")
+
+    try:
+        with pytest.raises(ValueError, match="nmslib"):
+            migrate_tool.migrate_index(os_backend.client, os3_backend.client, src, dst, dimension=DIMENSION, engine="nmslib")
+        # the target index must not have been created
+        assert not os3_backend.client.indices.exists(index=dst)
+    finally:
+        _teardown(os_backend.client, src, os_backend.exc)
+        _teardown(os3_backend.client, dst, os3_backend.exc)
 
 
 def test_migrate_rerun_is_idempotent(os_backend, requires_download):

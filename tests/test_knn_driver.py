@@ -26,9 +26,9 @@ def _knn_mappings() -> dict:
     return body
 
 
-@pytest.fixture
-def os_backend():
-    return make_backend("opensearch")
+@pytest.fixture(params=["opensearch", "opensearch3"])
+def os_backend(request):
+    return make_backend(request.param)
 
 
 def test_backend_running(os_backend):
@@ -47,12 +47,12 @@ def sknn(os_backend, requires_download):
         os_backend.client.indices.delete(index=name)
 
 
-@pytest.fixture
-async def asknn(requires_download):
+@pytest.fixture(params=["opensearch", "opensearch3"])
+async def asknn(request, requires_download):
     """A fresh k-NN index + async driver per test."""
     from image_match.opensearch_knn_async_driver import AsyncSignatureOpenSearchKNN
 
-    abackend = make_async_backend("opensearch")
+    abackend = make_async_backend(request.param)
     name = random_index_name("test_knn_async")
     await abackend.client.indices.create(index=name, body=_knn_mappings())
     yield AsyncSignatureOpenSearchKNN(abackend.client, index=name)

@@ -45,9 +45,13 @@ Options:
 ``--dimension``
     signature length, default ``648`` (default ``n_grid=9``)
 ``--engine``
-    knn engine: ``lucene`` (default), ``faiss``, ``nmslib``
+    knn engine: ``lucene`` (default), ``faiss``, ``nmslib`` — ``nmslib`` is
+    rejected when the target runs OpenSearch 3+ (see below)
 ``--space-type``
     vector space: ``l2`` (default), ``cosinesimil``, ``innerproduct``, ...
+``--data-type``
+    knn_vector data type: ``float`` (default) or ``byte`` — signatures are
+    int8, so ``byte`` is lossless and ~4x smaller in memory
 ``--batch-size``
     bulk request size (default 500)
 ``--delete-source``
@@ -55,7 +59,33 @@ Options:
 
 Documents whose signature length doesn't match ``--dimension`` are skipped and
 reported, not fatal. If the target index already exists, documents are appended
-into it (overwriting by ``_id``).
+into it (overwriting by ``_id``). The tool prints detected source/target server
+type and version before copying.
+
+Upgrading to OpenSearch 3
+-------------------------
+The same tool covers an OpenSearch 2 → 3 move — just point ``--target-url``
+at the OS3 cluster (word indexes copy verbatim; nothing about the word query
+DSL changed):
+
+.. code-block:: bash
+
+    $ uv run python tools/migrate_to_knn.py \
+        --source-url http://localhost:9201 --source-index images \
+        --target-url http://localhost:9202 --target-index images_knn
+
+OpenSearch 3.0 removed several k-NN index settings (``knn.algo_param.*``) and
+**blocks creating new indexes with the ``nmslib`` engine**. Implications:
+
+* ``knn_index_body()`` already emits the OS3-supported style — engine and
+  space parameters live in the *field mapping*, not index settings.
+* If your OS2 index used ``nmslib``, choose ``--engine faiss`` (or the
+  ``lucene`` default) for the OS3 target. The tool fails fast rather than
+  producing an index OS3 would reject.
+* Existing nmslib indexes keep *working* on a cluster upgraded to OS3 — the
+  block applies only to new index creation — but reindex/migration is the
+  moment to switch engines.
+* ``index.knn: true`` is still required on OS3; the tool sets it.
 
 Manual alternative
 ------------------

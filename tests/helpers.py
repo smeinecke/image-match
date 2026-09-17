@@ -35,7 +35,12 @@ MAPPINGS_NESTED = {
     }
 }
 
-BACKENDS = ["elasticsearch", "opensearch"]
+BACKENDS = ["elasticsearch", "opensearch", "opensearch3"]
+
+OPENSEARCH_URLS = {
+    "opensearch": ("OPENSEARCH_URL", "http://localhost:9201"),
+    "opensearch3": ("OPENSEARCH3_URL", "http://localhost:9202"),
+}
 
 
 def random_index_name(prefix: str = "test_environment") -> str:
@@ -47,13 +52,14 @@ def make_backend(name: str) -> SimpleNamespace:
 
     Skips the calling test if the backend's optional extra is not installed.
     """
-    if name == "opensearch":
+    if name in OPENSEARCH_URLS:
         module = pytest.importorskip("opensearchpy", reason="opensearch-py not installed (install the 'opensearch' extra)")
         from image_match.opensearch_driver import SignatureOpenSearch
 
+        env_var, default = OPENSEARCH_URLS[name]
         return SimpleNamespace(
             name=name,
-            client=module.OpenSearch(os.environ.get("OPENSEARCH_URL", "http://localhost:9201")),
+            client=module.OpenSearch(os.environ.get(env_var, default)),
             driver=SignatureOpenSearch,
             exc=module,
         )
@@ -73,15 +79,16 @@ def make_async_backend(name: str) -> SimpleNamespace:
 
     Skips the calling test if the backend's '-async' extra is not installed.
     """
-    if name == "opensearch":
+    if name in OPENSEARCH_URLS:
         module = pytest.importorskip("opensearchpy", reason="opensearch-py not installed (install the 'opensearch-async' extra)")
         if not hasattr(module, "AsyncOpenSearch"):
             pytest.skip("opensearch-py[async] not installed (install the 'opensearch-async' extra)")
         from image_match.opensearch_async_driver import AsyncSignatureOpenSearch
 
+        env_var, default = OPENSEARCH_URLS[name]
         return SimpleNamespace(
             name=name,
-            client=module.AsyncOpenSearch(os.environ.get("OPENSEARCH_URL", "http://localhost:9201")),
+            client=module.AsyncOpenSearch(os.environ.get(env_var, default)),
             driver=AsyncSignatureOpenSearch,
             exc=module,
         )

@@ -8,7 +8,7 @@ from .helpers import MAPPINGS, await_until_ready, make_async_backend, random_ind
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(params=["elasticsearch", "opensearch"])
+@pytest.fixture(params=["elasticsearch", "opensearch", "opensearch3"])
 def abackend(request):
     """An async search backend (client + driver), parametrized over ES and OpenSearch."""
     return make_async_backend(request.param)
