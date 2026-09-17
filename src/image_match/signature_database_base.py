@@ -262,6 +262,18 @@ class SignatureDatabaseBase:
             ]
 
         """
+        result = []
+        for transformed_record in self._orientation_records(path, all_orientations=all_orientations, bytestream=bytestream):
+            result.extend(self.search_single_record(transformed_record, pre_filter=pre_filter, **kwargs))
+
+        return dedupe_results(result)
+
+    def _orientation_records(self, path: ImageInput, all_orientations: bool = False, bytestream: bool = False) -> list[dict]:
+        """Build one search record per requested image orientation.
+
+        Pure CPU work (image decode + signature generation); async drivers run
+        this in a worker thread.
+        """
         img = self.gis.preprocess_image(path, bytestream=bytestream, handle_mpo=self.gis.handle_mpo)
         # default to no transformations
         orientations = [None]
@@ -280,8 +292,7 @@ class SignatureDatabaseBase:
 
         # try for every possible combination of transformations; if all_orientations=False,
         # this will only take one iteration
-        result = []
-
+        records = []
         for transform in orientations:
             # compose all functions (if not None) and apply on signature
             transformed_img = img
@@ -291,18 +302,21 @@ class SignatureDatabaseBase:
                         transformed_img = f(transformed_img)
 
             # generate the signature
-            transformed_record = make_record(transformed_img, self.gis, self.k, self.N)
+            records.append(make_record(transformed_img, self.gis, self.k, self.N))
 
-            result.extend(self.search_single_record(transformed_record, pre_filter=pre_filter, **kwargs))
+        return records
 
-        ids = set()
-        unique = []
-        for item in result:
-            if item["id"] not in ids:
-                unique.append(item)
-                ids.add(item["id"])
 
-        return sorted(unique, key=itemgetter("dist"))
+def dedupe_results(result: list[dict]) -> list[dict]:
+    """Drop duplicate ids and sort by dist."""
+    ids = set()
+    unique = []
+    for item in result:
+        if item["id"] not in ids:
+            unique.append(item)
+            ids.add(item["id"])
+
+    return sorted(unique, key=itemgetter("dist"))
 
 
 def make_record(

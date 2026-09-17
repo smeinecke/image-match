@@ -65,35 +65,12 @@ class SignatureES(SignatureDatabaseBase):
             a list of dicts representing matches, filtered by distance_cutoff
 
         """
-        rec.pop("path", None)
+        body = build_word_query(rec, pre_filter)
         signature = rec.pop("signature")
-        rec.pop("metadata", None)
-
-        # build the 'should' list -- only simple-word fields are searchable;
-        # stray fields (e.g. timestamp on a stored record) must not leak in
-        should = [{"term": {word: rec[word]}} for word in rec if word.startswith("simple_word_")]
-        body = {"query": {"bool": {"should": should}}, "_source": {"excludes": ["simple_word_*"]}}
-
-        if pre_filter is not None:
-            body["query"]["bool"]["filter"] = pre_filter
 
         res = self._search(body)["hits"]["hits"]
 
-        sigs = np.array([x["_source"]["signature"] for x in res])
-
-        if sigs.size == 0:
-            return []
-
-        dists = normalized_distance(sigs, np.array(signature))
-
-        formatted_res = [
-            {"id": x["_id"], "score": x["_score"], "metadata": x["_source"].get("metadata"), "path": x["_source"].get("url", x["_source"].get("path"))}
-            for x in res
-        ]
-
-        for i, row in enumerate(formatted_res):
-            row["dist"] = dists[i]
-        return [y for y in formatted_res if y["dist"] < self.distance_cutoff]
+        return format_hits(res, signature, self.distance_cutoff)
 
     def _search(self, body: dict) -> Any:
         """Run the word-match search.
@@ -128,12 +105,48 @@ class SignatureES(SignatureDatabaseBase):
         if limit is None:
             limit = self.delete_duplicates_limit
 
-        matching_paths = [
-            item["_id"]
-            for item in self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, size=limit)["hits"]["hits"]
-            if item["_source"].get("path") == path
-        ]
+        matching_paths = [item["_id"] for item in self._path_hits(path, limit) if item["_source"].get("path") == path]
 
-        if matching_paths:
-            for id_tag in matching_paths[1:]:
-                self.es.delete(index=self.index, id=id_tag)
+        for id_tag in matching_paths[1:]:
+            self.es.delete(index=self.index, id=id_tag)
+
+    def _path_hits(self, path: str, limit: int) -> list[dict]:
+        """Search for documents whose path field fuzzy-matches `path`."""
+        return self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, size=limit)["hits"]["hits"]
+
+
+def build_word_query(rec: dict, pre_filter: PreFilter = None) -> dict:
+    """Build the bool/should term query over a record's simple_word_* fields.
+
+    Removes 'path' and 'metadata' from rec; the caller pops 'signature'.
+    Stray stored fields (e.g. timestamp) must not leak into the query.
+    """
+    rec.pop("path", None)
+    rec.pop("metadata", None)
+
+    should = [{"term": {word: rec[word]}} for word in rec if word.startswith("simple_word_")]
+    body: dict = {"query": {"bool": {"should": should}}, "_source": {"excludes": ["simple_word_*"]}}
+
+    if pre_filter is not None:
+        body["query"]["bool"]["filter"] = pre_filter
+
+    return body
+
+
+def format_hits(hits: list[dict], signature: np.ndarray, distance_cutoff: float) -> list[dict]:
+    """Compute distances to a signature and return cutoff-filtered hit dicts."""
+    sigs = np.array([x["_source"]["signature"] for x in hits])
+
+    if sigs.size == 0:
+        return []
+
+    dists = normalized_distance(sigs, np.array(signature))
+
+    formatted_res = [
+        {"id": x["_id"], "score": x["_score"], "metadata": x["_source"].get("metadata"), "path": x["_source"].get("url", x["_source"].get("path"))}
+        for x in hits
+    ]
+
+    for i, row in enumerate(formatted_res):
+        row["dist"] = dists[i]
+    return [y for y in formatted_res if y["dist"] < distance_cutoff]
