@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from opensearchpy import OpenSearch
 
 
-def knn_index_body(dimension: int, engine: str = "lucene", space_type: str = "l2") -> dict[str, Any]:
+def knn_index_body(dimension: int, engine: str = "lucene", space_type: str = "l2", data_type: str = "float") -> dict[str, Any]:
     """Build the settings/mappings body for a hybrid k-NN index.
 
     Only 'signature' is mapped explicitly (as knn_vector); all other fields
@@ -22,9 +22,13 @@ def knn_index_body(dimension: int, engine: str = "lucene", space_type: str = "l2
     Args:
         dimension (int): signature vector length (648 for default n_grid=9)
         engine (Optional[str]): knn engine — 'lucene' (default, no native deps)
-            or 'faiss'/'nmslib' on clusters where they are available
+            or 'faiss'; 'nmslib' is OS2-only and rejected for new indexes on
+            OpenSearch 3
         space_type (Optional[str]): vector space — 'l2' (default) or
             'cosinesimil'/'innerproduct'/'hamming' depending on engine
+        data_type (Optional[str]): knn_vector data type — 'float' (default) or
+            'byte' (4x smaller; signatures are int8 so 'byte' fits losslessly;
+            requires OpenSearch >= 2.9)
 
     Returns:
         a dict suitable for client.indices.create(index=..., body=...)
@@ -37,6 +41,7 @@ def knn_index_body(dimension: int, engine: str = "lucene", space_type: str = "l2
                 "signature": {
                     "type": "knn_vector",
                     "dimension": dimension,
+                    "data_type": data_type,
                     "method": {"name": "hnsw", "engine": engine, "space_type": space_type},
                 }
             }

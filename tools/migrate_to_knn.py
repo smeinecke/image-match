@@ -28,12 +28,19 @@ if TYPE_CHECKING:
     from opensearchpy import OpenSearch
 
 
+def detect_server(client: Any) -> tuple[str, int | None]:
+    """Return (server_type, major_version) based on cluster info()."""
+    info = client.info()
+    version = info.get("version", {})
+    number = str(version.get("number", ""))
+    major = int(number.split(".", 1)[0]) if number[:1].isdigit() else None
+    server_type = "opensearch" if version.get("distribution") == "opensearch" else "elasticsearch"
+    return server_type, major
+
+
 def detect_server_type(client: Any) -> str:
     """Return 'opensearch' or 'elasticsearch' based on cluster info()."""
-    info = client.info()
-    if info.get("version", {}).get("distribution") == "opensearch":
-        return "opensearch"
-    return "elasticsearch"
+    return detect_server(client)[0]
 
 
 def make_client(url: str, server_type: str) -> Any:
@@ -68,6 +75,7 @@ def migrate_index(
     dimension: int = 648,
     engine: str = "lucene",
     space_type: str = "l2",
+    data_type: str = "float",
     batch_size: int = 500,
 ) -> dict[str, int]:
     """Copy documents from a word-overlap index into a new k-NN index.
@@ -78,8 +86,10 @@ def migrate_index(
         source_index: index name to read from
         target_index: index name to create and write to
         dimension: required signature vector length (648 for default n_grid=9)
-        engine: knn engine for the target mapping (default 'lucene')
+        engine: knn engine for the target mapping (default 'lucene');
+            'nmslib' is rejected when the target is OpenSearch 3+
         space_type: vector space for the target mapping (default 'l2')
+        data_type: knn_vector data type — 'float' (default) or 'byte'
         batch_size: bulk request batch size (default 500)
 
     Returns:
@@ -94,7 +104,10 @@ def migrate_index(
     if target_client.indices.exists(index=target_index):
         print(f"target index '{target_index}' already exists — appending into it")
     else:
-        target_client.indices.create(index=target_index, body=knn_index_body(dimension, engine, space_type))
+        target_type, target_major = detect_server(target_client)
+        if target_type == "opensearch" and target_major is not None and target_major >= 3 and engine == "nmslib":
+            raise ValueError("engine 'nmslib' is not supported on OpenSearch 3+ (blocked for new indexes since 3.0) — use 'lucene' or 'faiss'")
+        target_client.indices.create(index=target_index, body=knn_index_body(dimension, engine, space_type, data_type))
 
     stats = {"scanned": 0, "indexed": 0, "skipped": 0}
     actions: list[dict[str, Any]] = []
@@ -140,8 +153,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target-url", required=True, help="e.g. http://localhost:9201 (OpenSearch)")
     parser.add_argument("--target-index", required=True)
     parser.add_argument("--dimension", type=int, default=648, help="signature length (648 for default n_grid=9)")
-    parser.add_argument("--engine", default="lucene", choices=["lucene", "faiss", "nmslib"])
+    parser.add_argument(
+        "--engine",
+        default="lucene",
+        choices=["lucene", "faiss", "nmslib"],
+        help="knn engine (default lucene); nmslib is not available on OpenSearch 3+ targets",
+    )
     parser.add_argument("--space-type", default="l2", help="l2, cosinesimil, innerproduct, hamming (engine-dependent)")
+    parser.add_argument(
+        "--data-type",
+        default="float",
+        choices=["float", "byte"],
+        help="knn_vector data type; 'byte' stores int8 signatures losslessly at 4x smaller footprint",
+    )
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--delete-source", action="store_true", help="delete the source index after successful verification")
     args = parser.parse_args(argv)
@@ -156,7 +180,9 @@ def main(argv: list[str] | None = None) -> int:
     source = make_client(args.source_url, "opensearch" if args.source_type == "os" else "elasticsearch")
     target = make_client(args.target_url, "opensearch")
 
-    print(f"migrating {args.source_index} @ {args.source_url} -> {args.target_index} @ {args.target_url}")
+    src_type, src_major = detect_server(source)
+    dst_type, dst_major = detect_server(target)
+    print(f"migrating {args.source_index} @ {args.source_url} ({src_type} {src_major}) -> {args.target_index} @ {args.target_url} ({dst_type} {dst_major})")
     stats = migrate_index(
         source,
         target,
@@ -165,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         dimension=args.dimension,
         engine=args.engine,
         space_type=args.space_type,
+        data_type=args.data_type,
         batch_size=args.batch_size,
     )
     print(f"done: {stats}")
