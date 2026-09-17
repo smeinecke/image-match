@@ -5,6 +5,9 @@ from time import sleep
 from urllib.request import urlretrieve
 
 import pytest
+
+pytest.importorskip("elasticsearch", reason="elasticsearch not installed (install the 'elasticsearch' extra)")
+
 from elasticsearch import ConnectionError, Elasticsearch, NotFoundError, RequestError
 
 from image_match.elasticsearch_driver import SignatureES

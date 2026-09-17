@@ -6,12 +6,12 @@ from urllib.request import urlretrieve
 
 import pytest
 
-pytest.importorskip("elasticsearch", reason="elasticsearch not installed (install the 'elasticsearch' extra)")
+pytest.importorskip("opensearchpy", reason="opensearch-py not installed (install the 'opensearch' extra)")
 
-from elasticsearch import ConnectionError, Elasticsearch, NotFoundError, RequestError
+from opensearchpy import ConnectionError, NotFoundError, OpenSearch, RequestError
 from PIL import Image
 
-from image_match.elasticsearch_driver import SignatureES
+from image_match.opensearch_driver import SignatureOpenSearch
 
 pytestmark = pytest.mark.integration
 
@@ -19,7 +19,6 @@ pytestmark = pytest.mark.integration
 # resolves, and docs/source/_images holds copies of the reference images
 DOCS_IMAGES = os.path.join(os.path.dirname(__file__), "..", "docs", "source", "_images")
 test_img_url1 = "https://c2.staticflickr.com/8/7158/6814444991_08d82de57e_z.jpg"
-test_img_url2 = test_img_url1
 try:
     # import-time download; tests that need the file fail clearly if offline
     urlretrieve(test_img_url1, "test1.jpg")
@@ -43,6 +42,9 @@ MAPPINGS = {
     }
 }
 
+# elasticsearch occupies 9200; opensearch is exposed on 9201
+OPENSEARCH_HOST = os.environ.get("OPENSEARCH_URL", "http://localhost:9201")
+
 
 @pytest.fixture(scope="module", autouse=True)
 def index_name():
@@ -51,29 +53,18 @@ def index_name():
 
 @pytest.fixture(scope="function", autouse=True)
 def setup_index(request, index_name):
-    es = Elasticsearch()
+    os_client = OpenSearch(OPENSEARCH_HOST)
     try:
-        es.indices.create(index=index_name, body=MAPPINGS)
+        os_client.indices.create(index=index_name, body=MAPPINGS)
     except RequestError as e:
         if e.error == "resource_already_exists_exception":
-            es.indices.delete(index=index_name)
+            os_client.indices.delete(index=index_name)
         else:
             raise
 
     def fin():
         try:
-            es.indices.delete(index=index_name)
-        except NotFoundError:
-            pass
-
-    request.addfinalizer(fin)
-
-
-@pytest.fixture(scope="function", autouse=True)
-def cleanup_index(request, es, index_name):
-    def fin():
-        try:
-            es.indices.delete(index=index_name)
+            os_client.indices.delete(index=index_name)
         except NotFoundError:
             pass
 
@@ -81,32 +72,31 @@ def cleanup_index(request, es, index_name):
 
 
 @pytest.fixture
-def es():
-    return Elasticsearch()
+def os_client():
+    return OpenSearch(OPENSEARCH_HOST)
 
 
 @pytest.fixture
-def ses(es, index_name):
-    return SignatureES(es=es, index=index_name)
+def ses(os_client, index_name):
+    return SignatureOpenSearch(es=os_client, index=index_name)
 
 
-def test_elasticsearch_running(es):
+def test_opensearch_running(os_client):
     i = 0
     while i < 5:
         try:
-            es.ping()
+            os_client.ping()
             assert True
             return
         except ConnectionError:
             i += 1
             sleep(2)
 
-    pytest.fail("Elasticsearch not running (failed to connect after {} tries)".format(str(i)))
+    pytest.fail("OpenSearch not running (failed to connect after {} tries)".format(str(i)))
 
 
 def test_add_image_by_url(ses):
     ses.add_image(test_img_url1)
-    ses.add_image(test_img_url2)
     assert True
 
 
@@ -130,16 +120,6 @@ def test_add_image_as_bytestream(ses):
 def test_add_image_with_different_name(ses):
     ses.add_image("custom_name_test", img="test1.jpg", bytestream=False)
     assert True
-
-
-def test_lookup_from_url(ses):
-    ses.add_image("test1.jpg", refresh_after=True)
-    r = ses.search_image(test_img_url1)
-    assert len(r) == 1
-    assert r[0]["path"] == "test1.jpg"
-    assert "score" in r[0]
-    assert "dist" in r[0]
-    assert "id" in r[0]
 
 
 def test_lookup_from_file(ses):

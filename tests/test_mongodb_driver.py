@@ -3,6 +3,9 @@ import shutil
 from urllib.request import urlretrieve
 
 import pytest
+
+pytest.importorskip("pymongo", reason="pymongo not installed (install the 'mongo' extra)")
+
 from PIL import Image
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
