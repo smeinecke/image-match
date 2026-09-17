@@ -71,6 +71,8 @@ Full docs at [smeinecke.github.io/image-match](https://smeinecke.github.io/image
 - [Backends](https://smeinecke.github.io/image-match/backends.html) —
   including writing your own driver
 - [Migrating to OpenSearch k-NN](https://smeinecke.github.io/image-match/migration.html)
+- [Upgrading from 1.x](https://smeinecke.github.io/image-match/upgrading.html) —
+  breaking changes and compatibility notes
 - [API reference](https://smeinecke.github.io/image-match/api.html)
 
 ## Development

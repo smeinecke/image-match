@@ -28,6 +28,7 @@ Contents
     searches
     backends
     migration
+    upgrading
     api
     testing
     docs
