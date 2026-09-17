@@ -42,7 +42,7 @@ test = [
     "pytest-xdist",
 ]
 docs = [
-    "Sphinx>=7.2,<8.0",
+    "Sphinx>=7.2,<9.0",
     "sphinx-rtd-theme>=2.0",
 ]
 mongo = [
