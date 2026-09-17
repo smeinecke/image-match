@@ -106,7 +106,7 @@ jobs:
 
       - name: Start Elasticsearch, OpenSearch and MongoDB
         run: |
-          docker compose up -d elasticsearch mongodb opensearch
+          docker compose up -d elasticsearch mongodb opensearch opensearch3
           # Wait for Elasticsearch to be ready
           echo "Waiting for Elasticsearch to start..."
           timeout 180 bash -c 'until curl -sf http://localhost:9200/_cluster/health >/dev/null; do sleep 2; done'
@@ -115,10 +115,14 @@ jobs:
           echo "Waiting for MongoDB to start..."
           timeout 60 bash -c 'until nc -z localhost 27017; do sleep 1; done'
           echo "MongoDB is ready!"
-          # Wait for OpenSearch to be ready
-          echo "Waiting for OpenSearch to start..."
+          # Wait for OpenSearch 2 to be ready
+          echo "Waiting for OpenSearch 2 to start..."
           timeout 180 bash -c 'until curl -sf http://localhost:9201/_cluster/health >/dev/null; do sleep 2; done'
-          echo "OpenSearch is ready!"
+          echo "OpenSearch 2 is ready!"
+          # Wait for OpenSearch 3 to be ready
+          echo "Waiting for OpenSearch 3 to start..."
+          timeout 180 bash -c 'until curl -sf http://localhost:9202/_cluster/health >/dev/null; do sleep 2; done'
+          echo "OpenSearch 3 is ready!"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
