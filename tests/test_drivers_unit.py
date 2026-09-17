@@ -88,13 +88,13 @@ def test_dedupe_results():
 
 def test_base_init_validation():
     with pytest.raises(TypeError):
-        SignatureDatabaseBase(k="x")
+        SignatureDatabaseBase(k="x")  # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        SignatureDatabaseBase(N=1.5)
+        SignatureDatabaseBase(N=1.5)  # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        SignatureDatabaseBase(n_grid=None)
+        SignatureDatabaseBase(n_grid=None)  # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        SignatureDatabaseBase(distance_cutoff="hi")
+        SignatureDatabaseBase(distance_cutoff="hi")  # type: ignore[arg-type]
     with pytest.raises(ValueError):
         SignatureDatabaseBase(distance_cutoff=-1)
 

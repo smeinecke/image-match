@@ -73,21 +73,21 @@ def test_difference():
 
 def test_init_validation():
     with pytest.raises(AssertionError):
-        ImageSignature(crop_percentiles=(5,))  # not a pair
+        ImageSignature(crop_percentiles=(5,))  # type: ignore[arg-type] # not a pair
     with pytest.raises(AssertionError):
         ImageSignature(crop_percentiles=(-1, 95))
     with pytest.raises(AssertionError):
         ImageSignature(crop_percentiles=(95, 5))  # lower >= upper
     with pytest.raises(AssertionError):
-        ImageSignature(n=1.5)
+        ImageSignature(n=1.5)  # type: ignore[arg-type]
     with pytest.raises(AssertionError):
         ImageSignature(n=1)
     with pytest.raises(AssertionError):
-        ImageSignature(P="x")
+        ImageSignature(P="x")  # type: ignore[arg-type]
     with pytest.raises(AssertionError):
         ImageSignature(P=0)
     with pytest.raises(AssertionError):
-        ImageSignature(diagonal_neighbors=1)
+        ImageSignature(diagonal_neighbors=1)  # type: ignore[arg-type]
 
 
 def test_init_crop_percentiles_none():
@@ -130,7 +130,7 @@ def test_preprocess_ndarray_color_and_gray():
 
 def test_preprocess_invalid_type():
     with pytest.raises(TypeError):
-        ImageSignature.preprocess_image(12345)
+        ImageSignature.preprocess_image(12345)  # type: ignore[arg-type]
 
 
 def test_preprocess_bytestream_requires_bytes():
