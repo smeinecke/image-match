@@ -255,7 +255,7 @@ class ImageSignature:
         if isinstance(image_or_path, (str, os.PathLike)):
             return imread(image_or_path, as_gray=True)
 
-        if type(image_or_path) is bytes:
+        if isinstance(image_or_path, bytes):
             try:
                 img = Image.open(image_or_path)
                 arr = np.array(img.convert("RGB"))

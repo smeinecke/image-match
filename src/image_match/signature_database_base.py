@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from image_match.goldberg import ImageInput, ImageSignature
+from .goldberg import ImageInput, ImageSignature
 
 # a database filter clause: dict for MongoDB, dict or list of clauses for
 # Elasticsearch (e.g. {"term": {"metadata.tenant_id": "foo"}})

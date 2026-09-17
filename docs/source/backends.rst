@@ -53,7 +53,7 @@ as possible.  To write your own database backend, you can inherit from the
         def __init__(self, myarg1, myarg2, *args, **kwargs):
             # do some initializing stuff here if necessary
             # ...
-            super(MySignatureBakend, self).__init__(*args, **kwargs)
+            super().__init__(*args, **kwargs)
     
         # you MUST implement these two functions
         def search_single_record(self, rec):

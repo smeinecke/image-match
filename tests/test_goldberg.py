@@ -6,7 +6,7 @@ from image_match.goldberg import CorruptImageError, ImageSignature
 from .helpers import TEST_IMG_URL as test_img_url
 
 
-def test_load_from_url():
+def test_load_from_url(requires_download):
     gis = ImageSignature()
     sig = gis.generate_signature(test_img_url)
     assert type(sig) is ndarray
@@ -42,7 +42,7 @@ def test_load_from_corrupt_stream():
         gis.generate_signature(b"corrupt", bytestream=True)
 
 
-def test_all_inputs_same_sig():
+def test_all_inputs_same_sig(requires_download):
     gis = ImageSignature()
     sig1 = gis.generate_signature(test_img_url)
     sig2 = gis.generate_signature("test_url.jpg")

@@ -20,7 +20,7 @@ def index_name(backend):
 
 
 @pytest.fixture
-def ses(backend, index_name):
+def ses(backend, index_name, requires_download):
     return backend.driver(backend.client, index=index_name)
 
 

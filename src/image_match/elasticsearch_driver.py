@@ -62,11 +62,11 @@ class SignatureES(SignatureDatabaseBase):
         """
         rec.pop("path", None)
         signature = rec.pop("signature")
-        if "metadata" in rec:
-            rec.pop("metadata")
+        rec.pop("metadata", None)
 
-        # build the 'should' list
-        should = [{"term": {word: rec[word]}} for word in rec]
+        # build the 'should' list -- only simple-word fields are searchable;
+        # stray fields (e.g. timestamp on a stored record) must not leak in
+        should = [{"term": {word: rec[word]}} for word in rec if word.startswith("simple_word_")]
         body = {"query": {"bool": {"should": should}}, "_source": {"excludes": ["simple_word_*"]}}
 
         if pre_filter is not None:
@@ -121,7 +121,7 @@ class SignatureES(SignatureDatabaseBase):
         matching_paths = [
             item["_id"]
             for item in self.es.search(body={"query": {"match": {"path": path}}}, index=self.index, size=10000)["hits"]["hits"]
-            if item["_source"]["path"] == path
+            if item["_source"].get("path") == path
         ]
 
         if matching_paths:

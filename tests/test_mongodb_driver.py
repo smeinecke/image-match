@@ -23,7 +23,7 @@ def collection():
 
 
 @pytest.fixture
-def ses(collection):
+def ses(collection, requires_download):
     return SignatureMongo(collection)
 
 

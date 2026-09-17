@@ -39,6 +39,13 @@ def workdir(tmp_path, monkeypatch, downloaded_image):
     return tmp_path
 
 
+@pytest.fixture
+def requires_download(downloaded_image):
+    """Skip tests that need the remotely-fetched image when it is absent."""
+    if not downloaded_image.exists():
+        pytest.skip("flickr test image unavailable (offline?)")
+
+
 @pytest.fixture(params=BACKENDS)
 def backend(request):
     """A search backend (client + driver), parametrized over ES and OpenSearch."""
