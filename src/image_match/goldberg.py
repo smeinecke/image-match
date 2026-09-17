@@ -21,6 +21,13 @@ class CorruptImageError(RuntimeError):
     """Raised when image data cannot be decoded."""
 
 
+def _diagonal_differences(matrix: np.ndarray, diagonals: np.ndarray) -> np.ndarray:
+    """Differences along each diagonal of a square matrix, reassembled into
+    a matrix the same shape as the input.
+    """
+    return np.sum([np.diagflat(np.insert(np.diff(np.diag(matrix, i)), 0, 0), i) for i in diagonals], axis=0)
+
+
 class ImageSignature:
     """Image signature generator.
 
@@ -477,21 +484,20 @@ class ImageSignature:
             # this implementation will only work for a square (m x m) grid
             diagonals = np.arange(-grey_level_matrix.shape[0] + 1, grey_level_matrix.shape[0])
 
-            upper_left_neighbors = np.sum([np.diagflat(np.insert(np.diff(np.diag(grey_level_matrix, i)), 0, 0), i) for i in diagonals], axis=0)
+            upper_left_neighbors = _diagonal_differences(grey_level_matrix, diagonals)
             lower_right_neighbors = -np.pad(upper_left_neighbors[1:, 1:], (0, 1), mode="constant")
 
             # flip for anti-diagonal differences
-            flipped = np.fliplr(grey_level_matrix)
-            upper_right_neighbors = np.sum([np.diagflat(np.insert(np.diff(np.diag(flipped, i)), 0, 0), i) for i in diagonals], axis=0)
-            lower_left_neighbors = -np.pad(upper_right_neighbors[1:, 1:], (0, 1), mode="constant")
+            flipped_upper_right = _diagonal_differences(np.fliplr(grey_level_matrix), diagonals)
+            flipped_lower_left = -np.pad(flipped_upper_right[1:, 1:], (0, 1), mode="constant")
 
             return np.dstack([
                 upper_left_neighbors,
                 up_neighbors,
-                np.fliplr(upper_right_neighbors),
+                np.fliplr(flipped_upper_right),
                 left_neighbors,
                 right_neighbors,
-                np.fliplr(lower_left_neighbors),
+                np.fliplr(flipped_lower_left),
                 down_neighbors,
                 lower_right_neighbors,
             ])

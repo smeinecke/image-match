@@ -41,11 +41,10 @@ class SignatureMongo(SignatureDatabaseBase):
 
         """
         self.collection = collection
-        self.index_names = []
+        self.index_names: list[str] = []
         # Extract index fields, if any exist yet
         if self.collection.count_documents({}) > 0:
-            doc = self.collection.find_one({}) or {}
-            self.index_names = [field for field in doc if "simple" in field]
+            self._load_index_names()
 
         super().__init__(*args, **kwargs)
 
@@ -167,8 +166,7 @@ class SignatureMongo(SignatureDatabaseBase):
         # index_names may be empty if the collection was populated after
         # this instance was created; try to pick the fields up lazily
         if not self.index_names:
-            doc = self.collection.find_one({}) or {}
-            self.index_names = [field for field in doc if "simple" in field]
+            self._load_index_names()
 
         initial_q: Queue = Queue()
         for field_name in self.index_names[:word_limit]:
@@ -197,11 +195,14 @@ class SignatureMongo(SignatureDatabaseBase):
 
     def index_collection(self) -> None:
         """Index a collection on words."""
-        # Index on words
-        doc = self.collection.find_one({}) or {}
-        self.index_names = [field for field in doc if "simple" in field]
+        self._load_index_names()
         for name in self.index_names:
             self.collection.create_index(name)
+
+    def _load_index_names(self) -> None:
+        """(Re)read the simple-word field names from a sample document."""
+        doc = self.collection.find_one({}) or {}
+        self.index_names = [field for field in doc if "simple" in field]
 
 
 def get_next_match(
@@ -245,7 +246,7 @@ def get_next_match(
                 if dist < cutoff:
                     # put a fresh dict per match; sharing a growing dict across
                     # the queue races with the consumer iterating it
-                    result_q.put({rec["_id"]: {"dist": dist, "path": rec["path"], "id": rec["_id"], "metadata": rec.get("metadata")}})
+                    result_q.put({rec["_id"]: {"dist": dist, "path": rec.get("path"), "id": rec["_id"], "metadata": rec.get("metadata")}})
     finally:
         # always signal completion, even on error, so the consumer doesn't hang
         result_q.put("STOP")
