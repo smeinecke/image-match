@@ -278,6 +278,14 @@ the GIL):
 
     ses.add_images(urls, n_threads=8)
 
+For very large collections, ``chunk_size`` bounds memory by generating and
+indexing in batches instead of buffering every record first. A requested
+``refresh_after`` is applied to the final chunk only:
+
+.. code-block:: python
+
+    ses.add_images(urls, n_threads=8, chunk_size=500, refresh_after=True)
+
 For CPU-bound bulk imports, generate the records in a process pool —
 ``make_record`` is picklable by design — and hand them to ``insert_records``:
 

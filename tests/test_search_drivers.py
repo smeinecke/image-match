@@ -182,7 +182,7 @@ def test_duplicate_removal_with_limit(ses):
 
 def test_add_images_bulk_and_delete_image(ses):
     """Bulk-insert several images, search, then remove one entirely."""
-    n = ses.add_images(["test1.jpg", "test2.jpg", "test_diff.jpg"], metadata={"batch": "bulk"}, refresh_after=True)
+    n = ses.add_images(["test1.jpg", "test2.jpg", "test_diff.jpg"], metadata={"batch": "bulk"}, chunk_size=2, refresh_after=True)
     assert n == 3
 
     r = ses.search_image("test1.jpg")

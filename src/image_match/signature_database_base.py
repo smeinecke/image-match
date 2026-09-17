@@ -235,6 +235,7 @@ class SignatureDatabaseBase:
         metadata: dict[str, Any] | list[dict[str, Any] | None] | None = None,
         bytestream: bool = False,
         n_threads: int = 1,
+        chunk_size: int | None = None,
         **kwargs: Any,
     ) -> int:
         """Generate signatures for many images and bulk-insert the records.
@@ -251,14 +252,34 @@ class SignatureDatabaseBase:
                 list of dicts/None aligned with paths (default None)
             bytestream (Optional[boolean]): inputs are raw image bytes (default False)
             n_threads (Optional[int]): signature-generation threads (default 1)
-            **kwargs: passed to insert_records (e.g. refresh_after)
+            chunk_size (Optional[int]): process and insert in batches of this many
+                images instead of buffering all records in memory (default None =
+                one bulk request)
+            **kwargs: passed to insert_records (e.g. refresh_after — honored on
+                the final chunk only)
 
         Returns:
             the number of successfully indexed records
 
         """
-        records = self._make_records(list(paths), metadata=metadata, bytestream=bytestream, n_threads=n_threads)
-        return self.insert_records(records, **kwargs)
+        paths = list(paths)
+        metas = _normalize_metadata(metadata, len(paths))
+
+        if chunk_size is not None and chunk_size < 1:
+            raise ValueError(f"chunk_size must be a positive integer (got {chunk_size})")
+
+        if not chunk_size or chunk_size >= len(paths):
+            records = self._make_records(paths, metas, bytestream=bytestream, n_threads=n_threads)
+            return self.insert_records(records, **kwargs)
+
+        total = 0
+        for start in range(0, len(paths), chunk_size):
+            records = self._make_records(paths[start : start + chunk_size], metas[start : start + chunk_size], bytestream=bytestream, n_threads=n_threads)
+            chunk_kwargs = dict(kwargs)
+            if start + chunk_size < len(paths):
+                chunk_kwargs["refresh_after"] = False  # refresh once, on the last chunk
+            total += self.insert_records(records, **chunk_kwargs)
+        return total
 
     def _make_records(
         self, paths: list[ImageInput], metadata: dict[str, Any] | list[dict[str, Any] | None] | None = None, bytestream: bool = False, n_threads: int = 1

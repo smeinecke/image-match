@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, override
 
 from .elasticsearch_driver import build_word_query, duplicate_ids, exact_path_ids, format_hits, helpers_module
-from .signature_database_base import ImageInput, PreFilter, SignatureDatabaseBase, dedupe_results, make_record
+from .signature_database_base import ImageInput, PreFilter, SignatureDatabaseBase, _normalize_metadata, dedupe_results, make_record
 
 if TYPE_CHECKING:
     from elasticsearch import AsyncElasticsearch
@@ -150,6 +150,7 @@ class AsyncSignatureES(SignatureDatabaseBase):
         metadata: dict[str, Any] | list[dict[str, Any] | None] | None = None,
         bytestream: bool = False,
         n_threads: int = 1,
+        chunk_size: int | None = None,
         **kwargs: Any,
     ) -> int:
         """Generate signatures for many images and bulk-insert the records.
@@ -163,14 +164,34 @@ class AsyncSignatureES(SignatureDatabaseBase):
                 list of dicts/None aligned with paths (default None)
             bytestream (Optional[boolean]): inputs are raw image bytes (default False)
             n_threads (Optional[int]): signature-generation threads (default 1)
-            **kwargs: passed to insert_records (e.g. refresh_after)
+            chunk_size (Optional[int]): process and insert in batches of this many
+                images instead of buffering all records in memory (default None =
+                one bulk request)
+            **kwargs: passed to insert_records (e.g. refresh_after — honored on
+                the final chunk only)
 
         Returns:
             the number of successfully indexed records
 
         """
-        records = await asyncio.to_thread(self._make_records, list(paths), metadata, bytestream, n_threads)
-        return await self.insert_records(records, **kwargs)
+        paths = list(paths)
+        metas = _normalize_metadata(metadata, len(paths))
+
+        if chunk_size is not None and chunk_size < 1:
+            raise ValueError(f"chunk_size must be a positive integer (got {chunk_size})")
+
+        if not chunk_size or chunk_size >= len(paths):
+            records = await asyncio.to_thread(self._make_records, paths, metas, bytestream, n_threads)
+            return await self.insert_records(records, **kwargs)
+
+        total = 0
+        for start in range(0, len(paths), chunk_size):
+            records = await asyncio.to_thread(self._make_records, paths[start : start + chunk_size], metas[start : start + chunk_size], bytestream, n_threads)
+            chunk_kwargs = dict(kwargs)
+            if start + chunk_size < len(paths):
+                chunk_kwargs["refresh_after"] = False  # refresh once, on the last chunk
+            total += await self.insert_records(records, **chunk_kwargs)
+        return total
 
     @override
     async def insert_records(self, records: list[dict[str, Any]], refresh_after: bool = False, **kwargs: Any) -> int:

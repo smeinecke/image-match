@@ -266,6 +266,36 @@ def test_add_images_metadata_broadcast_and_list():
         d._make_records(["test.jpg"], metadata=[{"a": 1}, {"b": 2}])
 
 
+def test_add_images_chunked():
+    """chunk_size splits generation+insertion; refresh_after lands on the last chunk only."""
+    d = _StubDriver()
+    d.insert_records = MagicMock(side_effect=lambda recs, **kw: len(recs))
+    n = d.add_images(["test.jpg", "test2.jpg", "test.jpg", "test2.jpg", "test.jpg"], chunk_size=2, refresh_after=True)
+    assert n == 5
+    calls = d.insert_records.call_args_list
+    assert [len(c.args[0]) for c in calls] == [2, 2, 1]
+    assert [c.kwargs.get("refresh_after") for c in calls] == [False, False, True]
+
+
+def test_add_images_chunk_size_larger_than_input():
+    """chunk_size >= len(paths) is a single bulk call."""
+    d = _StubDriver()
+    d.insert_records = MagicMock(return_value=2)
+    assert d.add_images(["test.jpg", "test2.jpg"], chunk_size=10) == 2
+    assert d.insert_records.call_count == 1
+
+    with pytest.raises(ValueError, match="chunk_size"):
+        d.add_images(["test.jpg"], chunk_size=0)
+
+
+def test_add_images_chunked_metadata_aligned():
+    """Per-image metadata stays aligned across chunk boundaries."""
+    d = _StubDriver()
+    n = d.add_images(["test.jpg", "test2.jpg", "test.jpg"], metadata=[{"i": 0}, {"i": 1}, {"i": 2}], chunk_size=2)
+    assert n == 3
+    assert [r["metadata"]["i"] for r in d.inserted] == [0, 1, 2]
+
+
 def test_search_image_dedupes_and_sorts():
     d = _StubDriver()
     d.results = [{"id": "x", "dist": 0.2}, {"id": "x", "dist": 0.2}]
@@ -1260,6 +1290,24 @@ async def test_async_es_insert_records_and_delete_image():
     )
     assert await ses.delete_image("p") == 2
     assert es.delete.await_count == 2
+
+
+async def test_async_es_add_images_chunked():
+    """chunk_size splits into multiple async_bulk calls; refresh only on the last."""
+    pytest.importorskip("aiohttp", reason="async extras not installed")
+    from image_match.elasticsearch_async_driver import AsyncSignatureES
+
+    es = _async_es()
+    ses = AsyncSignatureES(es, index="idx")
+
+    fake_helpers = MagicMock()
+    fake_helpers.async_bulk = AsyncMock(side_effect=lambda client, actions, **kw: (len(actions), []))
+    with patch("image_match.elasticsearch_async_driver.helpers_module", return_value=fake_helpers):
+        n = await ses.add_images(["test.jpg", "test2.jpg", "test.jpg"], chunk_size=2, refresh_after=True)
+    assert n == 3
+    calls = fake_helpers.async_bulk.await_args_list
+    assert len(calls) == 2
+    assert [c.kwargs.get("refresh") for c in calls] == [False, True]
 
 
 async def test_async_opensearch_params():
