@@ -38,18 +38,17 @@ test-all: test-cov
 db-up:
 	docker compose up -d elasticsearch mongodb
 	@echo "Waiting for Elasticsearch to be ready..."
-	@bash -c 'for i in $$(seq 1 90); do curl -sf http://localhost:9200/_cluster/health >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1' || echo "Timeout waiting for Elasticsearch"
+	@bash -c 'for i in $$(seq 1 90); do curl -sf http://localhost:9200/_cluster/health >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1' || { echo "Timeout waiting for Elasticsearch"; exit 1; }
 	@echo "Elasticsearch is ready!"
 	@echo "Waiting for MongoDB to be ready..."
-	@bash -c 'for i in $$(seq 1 30); do nc -z localhost 27017 2>/dev/null && exit 0; sleep 1; done; exit 1' || echo "Timeout waiting for MongoDB"
+	@bash -c 'for i in $$(seq 1 30); do nc -z localhost 27017 2>/dev/null && exit 0; sleep 1; done; exit 1' || { echo "Timeout waiting for MongoDB"; exit 1; }
 	@echo "MongoDB is ready!"
 
 db-down:
 	docker compose down
 
 test-integration-local: db-up
-	uv run pytest tests -v -m integration --timeout=120
-	$(MAKE) db-down
+	uv run pytest tests -v -m integration --timeout=120; status=$$?; $(MAKE) db-down; exit $$status
 
 vulture:
 	uv run vulture . --exclude .venv,tests,docs --make-whitelist

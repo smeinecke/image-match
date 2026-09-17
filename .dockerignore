@@ -3,5 +3,7 @@
 .ropeproject
 .editorconfig
 .gitignore
+.venv
+__pycache__
 Dockerfile
 LICENSES.md
