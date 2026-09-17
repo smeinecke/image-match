@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from itertools import product
 from operator import itemgetter
 from typing import Any
@@ -229,7 +230,13 @@ class SignatureDatabaseBase:
         self.insert_single_record(rec, *args, **kwargs)
 
     def search_image(
-        self, path: ImageInput, all_orientations: bool = False, bytestream: bool = False, pre_filter: PreFilter = None, **kwargs: Any
+        self,
+        path: ImageInput,
+        all_orientations: bool = False,
+        bytestream: bool = False,
+        pre_filter: PreFilter = None,
+        n_threads: int = 1,
+        **kwargs: Any,
     ) -> list[dict[str, Any]]:
         """Search for matches
 
@@ -243,6 +250,9 @@ class SignatureDatabaseBase:
                 (default False)
             pre_filter (Optional[dict]): filters list before applying the matching algorithm
                 (default None)
+            n_threads (Optional[int]): run orientation searches concurrently in
+                this many threads; only relevant when all_orientations=True
+                (default 1 = sequential)
             **kwargs: Arbitrary keyword arguments to pass to search_single_record
                 (e.g. n_parallel_words for the MongoDB driver)
 
@@ -264,11 +274,17 @@ class SignatureDatabaseBase:
             ]
 
         """
-        result = []
-        for transformed_record in self._orientation_records(path, all_orientations=all_orientations, bytestream=bytestream):
-            result.extend(self.search_single_record(transformed_record, pre_filter=pre_filter, **kwargs))
+        records = self._orientation_records(path, all_orientations=all_orientations, bytestream=bytestream)
 
-        return dedupe_results(result)
+        if n_threads > 1 and len(records) > 1:
+            # each orientation record is an independent dict, so the queries
+            # can safely run concurrently (ES/OS clients are thread-safe)
+            with ThreadPoolExecutor(max_workers=n_threads) as pool:
+                per_record = list(pool.map(lambda rec: self.search_single_record(rec, pre_filter=pre_filter, **kwargs), records))
+        else:
+            per_record = [self.search_single_record(rec, pre_filter=pre_filter, **kwargs) for rec in records]
+
+        return dedupe_results([match for matches in per_record for match in matches])
 
     def _orientation_records(self, path: ImageInput, all_orientations: bool = False, bytestream: bool = False) -> list[dict[str, Any]]:
         """Build one search record per requested image orientation.

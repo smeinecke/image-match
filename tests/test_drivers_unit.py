@@ -300,6 +300,8 @@ def _mongo_collection(docs=None, n_indexes=1):
     coll.count_documents.return_value = len(docs or [])
     coll.find_one.return_value = (docs or [None])[0]
     coll.index_information.return_value = {f"idx_{i}": {} for i in range(n_indexes)}
+    # get_next_match fetches via find().limit()
+    coll.find.return_value.limit.return_value = iter([])
     return coll
 
 
@@ -371,7 +373,7 @@ def test_mongo_search_single_record():
     target_sig = np.arange(64) % 3 - 1
     doc = {"_id": "m1", "signature": target_sig.tolist(), "path": "p.jpg"}
     coll = _mongo_collection(docs=[{"simple_word_0": 0}])
-    coll.find.return_value = iter([doc])
+    coll.find.return_value.limit.return_value = iter([doc])
     ses = SignatureMongo(coll)
     ses.index_names = ["simple_word_0"]
     rec = _rec()
@@ -394,11 +396,12 @@ def test_mongo_search_skips_popular_words():
     from image_match.mongodb_driver import SignatureMongo
 
     coll = _mongo_collection(docs=[{"simple_word_0": 0}])
-    coll.count_documents.side_effect = lambda q: 99999  # over maximum_matches
+    # word matches more than maximum_matches docs -> skipped as non-discriminatory
+    coll.find.return_value.limit.return_value = iter([{"_id": i} for i in range(101)])
     ses = SignatureMongo(coll)
     ses.index_names = ["simple_word_0"]
     assert ses.search_single_record(_rec(), maximum_matches=100) == []
-    coll.find.assert_not_called()
+    coll.find.assert_called_once()
 
 
 def test_get_next_match_pre_filter():
@@ -408,8 +411,7 @@ def test_get_next_match_pre_filter():
 
     rq = Queue()
     coll = MagicMock()
-    coll.count_documents.return_value = 1
-    coll.find.return_value = iter([])
+    coll.find.return_value.limit.return_value = iter([])
     get_next_match(rq, {"simple_word_0": 5}, coll, np.zeros(64), pre_filter={"metadata.t": "x"})
     # query merged filter + word
     assert coll.find.call_args[0][0] == {"simple_word_0": 5, "metadata.t": "x"}
@@ -489,3 +491,94 @@ async def test_async_opensearch_params():
     call = client.index.await_args
     assert call.kwargs["body"] is rec
     assert call.kwargs["params"]["refresh"] == "true"
+
+
+# --- Search tuning: minimum_should_match / filter context -----------------
+
+
+def test_build_word_query_minimum_should_match():
+    from image_match.elasticsearch_driver import build_word_query
+
+    body = build_word_query(dict(_rec()), minimum_should_match=3)
+    boolq = body["query"]["bool"]
+    assert len(boolq["should"]) == 5
+    assert boolq["minimum_should_match"] == 3
+
+
+def test_build_word_query_minimum_should_match_string():
+    from image_match.elasticsearch_driver import build_word_query
+
+    body = build_word_query(dict(_rec()), minimum_should_match="2<75%")
+    assert body["query"]["bool"]["minimum_should_match"] == "2<75%"
+
+
+def test_build_word_query_filter_context():
+    from image_match.elasticsearch_driver import build_word_query
+
+    body = build_word_query(
+        dict(_rec()),
+        pre_filter={"term": {"metadata.t": "x"}},
+        minimum_should_match=2,
+        use_filter_context=True,
+    )
+    filters = body["query"]["bool"]["filter"]
+    assert filters[0] == {"term": {"metadata.t": "x"}}
+    word_bool = filters[1]["bool"]
+    assert len(word_bool["should"]) == 5
+    assert word_bool["minimum_should_match"] == 2
+    # no scoring should-clause at the top level
+    assert "should" not in body["query"]["bool"]
+
+
+def test_build_word_query_filter_context_list_pre_filter():
+    from image_match.elasticsearch_driver import build_word_query
+
+    clauses = [{"term": {"metadata.t": "x"}}, {"term": {"metadata.u": "y"}}]
+    body = build_word_query(dict(_rec()), pre_filter=clauses, use_filter_context=True)
+    filters = body["query"]["bool"]["filter"]
+    assert filters[:2] == clauses
+
+
+def test_es_driver_plumbs_query_options():
+    from image_match.elasticsearch_driver import SignatureES
+
+    es = MagicMock()
+    es.search.return_value = _es_hits()
+    ses = SignatureES(es, minimum_should_match=4, use_filter_context=True)
+    ses.search_single_record(_rec())
+    body = es.search.call_args.kwargs["body"]
+    assert "filter" in body["query"]["bool"]
+
+
+# --- search_image n_threads ------------------------------------------------
+
+
+def test_search_image_n_threads():
+    import threading
+
+    d = _StubDriver()
+    seen_threads = set()
+    orig = d.search_single_record
+
+    def spy(rec, pre_filter=None, **kw):
+        seen_threads.add(threading.current_thread().name)
+        return orig(rec, pre_filter=pre_filter, **kw)
+
+    d.search_single_record = spy
+    d.search_image("test.jpg", all_orientations=True, n_threads=4)
+    assert len(seen_threads) > 1
+
+
+def test_search_image_n_threads_default_sequential():
+    import threading
+
+    d = _StubDriver()
+    seen_threads = set()
+
+    def spy(rec, pre_filter=None, **kw):
+        seen_threads.add(threading.current_thread().name)
+        return []
+
+    d.search_single_record = spy
+    d.search_image("test.jpg", all_orientations=True)
+    assert len(seen_threads) == 1

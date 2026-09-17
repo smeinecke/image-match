@@ -48,6 +48,8 @@ class AsyncSignatureES(SignatureDatabaseBase):
         timeout: str = "10s",
         size: int = 100,
         delete_duplicates_limit: int = 10000,
+        minimum_should_match: int | str | None = None,
+        use_filter_context: bool = False,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -60,6 +62,13 @@ class AsyncSignatureES(SignatureDatabaseBase):
             size (Optional[int]): maximum number of Elasticsearch results (default 100)
             delete_duplicates_limit (Optional[int]): maximum number of duplicate candidates
                 scanned per delete_duplicates call (default 10000)
+            minimum_should_match (Optional[int | str]): require this many word
+                clauses to match — e.g. 2 or "3<75%"; prunes low-overlap
+                candidates on large indexes (default None = match any word)
+            use_filter_context (Optional[bool]): wrap the word disjunction in a
+                filter context so Elasticsearch skips BM25 scoring entirely;
+                faster on large indexes but the returned 'score' is constant
+                (default False)
             *args (Optional): Variable length argument list to pass to base constructor
             **kwargs (Optional): Arbitrary keyword arguments to pass to base constructor
 
@@ -69,6 +78,8 @@ class AsyncSignatureES(SignatureDatabaseBase):
         self.timeout = timeout
         self.size = size
         self.delete_duplicates_limit = delete_duplicates_limit
+        self.minimum_should_match = minimum_should_match
+        self.use_filter_context = use_filter_context
 
         super().__init__(*args, **kwargs)
 
@@ -89,7 +100,7 @@ class AsyncSignatureES(SignatureDatabaseBase):
             a list of dicts representing matches, filtered by distance_cutoff
 
         """
-        body = build_word_query(rec, pre_filter)
+        body = build_word_query(rec, pre_filter, self.minimum_should_match, self.use_filter_context)
         signature = rec.pop("signature")
 
         res = (await self._search(body))["hits"]["hits"]
@@ -157,11 +168,11 @@ class AsyncSignatureES(SignatureDatabaseBase):
         """
         records = await asyncio.to_thread(self._orientation_records, path, all_orientations, bytestream)
 
-        result = []
-        for rec in records:
-            result.extend(await self.search_single_record(rec, pre_filter=pre_filter, **kwargs))
+        # run all orientation queries concurrently — with all_orientations=True
+        # this collapses 16 sequential round trips into one batch
+        per_record = await asyncio.gather(*(self.search_single_record(rec, pre_filter=pre_filter, **kwargs) for rec in records))
 
-        return dedupe_results(result)
+        return dedupe_results([match for matches in per_record for match in matches])
 
     async def delete_duplicates(self, path: str, limit: int | None = None) -> None:
         """Delete all but one entries in elasticsearch whose `path` value is equivalent to that of path.

@@ -204,6 +204,28 @@ the metadata directly, but the user can use Elasticsearch's QL, for example with
 
     ses.es.search('images', body={'query': {'match': {'metadata.things': 'stuff!'}}})
 
+Tuning search speed
+^^^^^^^^^^^^^^^^^^^
+On large indexes, the word-overlap query can be made cheaper:
+
+* ``minimum_should_match`` — require at least this many of the 63 word clauses
+  to match (int like ``3`` or a Lucene spec string like ``"2<75%"``). Prunes
+  low-overlap candidates before scoring; a real match shares most of its words,
+  so recall impact is minimal in practice.
+* ``use_filter_context=True`` — evaluate the word disjunction in filter
+  context, skipping BM25 scoring entirely. The returned ``score`` is then
+  constant and meaningless — sort by ``dist`` (``search_image`` already does).
+* ``n_threads`` — ``search_image(..., all_orientations=True, n_threads=8)``
+  runs the 16 orientation queries concurrently. The async drivers always run
+  them concurrently via ``asyncio.gather``.
+* MongoDB: ``n_parallel_words`` (default ``4``, ``None`` = ``cpu_count()``)
+  controls how many word queries run concurrently per search, and
+  ``word_limit`` caps how many of the N words are scanned at all.
+
+.. code-block:: python
+
+    ses = SignatureES(es, minimum_should_match=3, use_filter_context=True)
+
 Removing duplicates
 ^^^^^^^^^^^^^^^^^^^
 If the same image was added more than once, ``delete_duplicates`` removes all

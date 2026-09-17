@@ -54,7 +54,7 @@ class SignatureMongo(SignatureDatabaseBase):
         rec: dict[str, Any],
         pre_filter: PreFilter = None,
         *,
-        n_parallel_words: int | None = 1,
+        n_parallel_words: int | None = 4,
         word_limit: int | None = None,
         process_timeout: float | None = None,
         maximum_matches: int = 1000,
@@ -66,7 +66,7 @@ class SignatureMongo(SignatureDatabaseBase):
             pre_filter (Optional[dict]): additional query conditions merged into
                 each find query (default None)
             n_parallel_words (Optional[int]): number of words to scan in parallel;
-                if None, uses cpu_count() (default 1)
+                if None, uses cpu_count() (default 4)
             word_limit (Optional[int]): only scan this many words; if None, all
                 N words are used (default None)
             process_timeout (Optional[float]): seconds to wait for a worker result
@@ -239,20 +239,18 @@ def get_next_match(
         if pre_filter:
             query.update(pre_filter)
 
-        # if the query has many matches, then it's probably not a huge help. Get the next one.
-        if collection.count_documents(query) <= max_in_cursor:
-            curs = collection.find(query, projection=["_id", "signature", "path", "metadata"])
-            while True:
-                try:
-                    rec = next(curs)
-                except StopIteration:
-                    # do nothing...the cursor is exhausted
-                    break
-                dist = normalized_distance(np.reshape(signature, (1, signature.size)), np.array(rec["signature"]))[0]
-                if dist < cutoff:
-                    # put a fresh dict per match; sharing a growing dict across
-                    # the queue races with the consumer iterating it
-                    result_q.put({rec["_id"]: {"dist": dist, "path": rec.get("path"), "id": rec["_id"], "metadata": rec.get("metadata")}})
+        # fetch up to max_in_cursor+1 docs in one round trip; if the word
+        # matches more than that it is probably non-discriminatory — skip it
+        curs = collection.find(query, projection=["_id", "signature", "path", "metadata"]).limit(max_in_cursor + 1)
+        recs = list(curs)
+        if len(recs) > max_in_cursor:
+            return
+        for rec in recs:
+            dist = normalized_distance(np.reshape(signature, (1, signature.size)), np.array(rec["signature"]))[0]
+            if dist < cutoff:
+                # put a fresh dict per match; sharing a growing dict across
+                # the queue races with the consumer iterating it
+                result_q.put({rec["_id"]: {"dist": dist, "path": rec.get("path"), "id": rec["_id"], "metadata": rec.get("metadata")}})
     finally:
         # always signal completion, even on error, so the consumer doesn't hang
         result_q.put("STOP")

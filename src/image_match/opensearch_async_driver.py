@@ -33,7 +33,16 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
     """
 
     def __init__(
-        self, es: AsyncOpenSearch, index: str = "images", timeout: str = "10s", size: int = 100, delete_duplicates_limit: int = 10000, *args: Any, **kwargs: Any
+        self,
+        es: AsyncOpenSearch,
+        index: str = "images",
+        timeout: str = "10s",
+        size: int = 100,
+        delete_duplicates_limit: int = 10000,
+        minimum_should_match: int | str | None = None,
+        use_filter_context: bool = False,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         """Extra setup for OpenSearch
 
@@ -44,6 +53,13 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
             size (Optional[int]): maximum number of OpenSearch results (default 100)
             delete_duplicates_limit (Optional[int]): maximum number of duplicate candidates
                 scanned per delete_duplicates call (default 10000)
+            minimum_should_match (Optional[int | str]): require this many word
+                clauses to match — e.g. 2 or "3<75%"; prunes low-overlap
+                candidates on large indexes (default None = match any word)
+            use_filter_context (Optional[bool]): wrap the word disjunction in a
+                filter context so OpenSearch skips BM25 scoring entirely;
+                faster on large indexes but the returned 'score' is constant
+                (default False)
             *args (Optional): Variable length argument list to pass to base constructor
             **kwargs (Optional): Arbitrary keyword arguments to pass to base constructor
 
@@ -51,7 +67,15 @@ class AsyncSignatureOpenSearch(AsyncSignatureES):
         # the async OpenSearch client is API-identical to AsyncElasticsearch
         # for the operations used here; the cast is purely for type checkers
         super().__init__(
-            cast("AsyncElasticsearch", es), index=index, timeout=timeout, size=size, delete_duplicates_limit=delete_duplicates_limit, *args, **kwargs
+            cast("AsyncElasticsearch", es),
+            index=index,
+            timeout=timeout,
+            size=size,
+            delete_duplicates_limit=delete_duplicates_limit,
+            minimum_should_match=minimum_should_match,
+            use_filter_context=use_filter_context,
+            *args,
+            **kwargs,
         )
 
     @override
