@@ -14,6 +14,9 @@ Usage:
         --source-url http://localhost:9200 --source-index images \
         --target-url http://localhost:9201 --target-index images_knn
 
+    # large indexes: fan out with parallel sliced scrolls (e.g. one per shard)
+    uv run python tools/migrate_to_knn.py ... --slices 8
+
 Requires image-match plus the relevant client extras
 (image-match[elasticsearch] and/or image-match[opensearch]).
 """
@@ -43,19 +46,27 @@ def detect_server_type(client: Any) -> str:
     return detect_server(client)[0]
 
 
-def make_client(url: str, server_type: str) -> Any:
-    """Construct a client for the given server type."""
+def make_client(url: str, server_type: str, timeout: int = 30) -> Any:
+    """Construct a client for the given server type.
+
+    Retries on timeout are enabled — long scroll/bulk requests on a loaded
+    cluster occasionally exceed the default 10s read timeout, and a single
+    timeout must not kill a multi-hour migration.
+    """
     if server_type == "opensearch":
         try:
             from opensearchpy import OpenSearch
         except ImportError as e:
             raise SystemExit("opensearch-py is required: pip install image-match[opensearch]") from e
-        return OpenSearch(url)
+        return OpenSearch(url, timeout=timeout, retry_on_timeout=True, max_retries=3)
     try:
         from elasticsearch import Elasticsearch
     except ImportError as e:
         raise SystemExit("elasticsearch is required: pip install image-match[elasticsearch]") from e
-    return Elasticsearch(url)
+    try:
+        return Elasticsearch(url, request_timeout=timeout, retry_on_timeout=True, max_retries=3)
+    except TypeError:  # elasticsearch-py 7.x uses 'timeout'
+        return Elasticsearch(url, timeout=timeout, retry_on_timeout=True, max_retries=3)
 
 
 def _helpers_for(client: Any) -> tuple[Any, Any]:
@@ -77,6 +88,7 @@ def migrate_index(
     space_type: str = "l2",
     data_type: str = "float",
     batch_size: int = 500,
+    slices: int = 1,
 ) -> dict[str, int]:
     """Copy documents from a word-overlap index into a new k-NN index.
 
@@ -91,6 +103,9 @@ def migrate_index(
         space_type: vector space for the target mapping (default 'l2')
         data_type: knn_vector data type — 'float' (default) or 'byte'
         batch_size: bulk request batch size (default 500)
+        slices: number of parallel sliced scrolls (default 1 — sequential).
+            >1 fans the scan out across N threads; matching the source index's
+            shard count is a reasonable choice. Both clients are thread-safe.
 
     Returns:
         a stats dict {scanned, indexed, skipped}
@@ -109,28 +124,44 @@ def migrate_index(
             raise ValueError("engine 'nmslib' is not supported on OpenSearch 3+ (blocked for new indexes since 3.0) — use 'lucene' or 'faiss'")
         target_client.indices.create(index=target_index, body=knn_index_body(dimension, engine, space_type, data_type))
 
+    def _migrate_slice(slice_id: int | None) -> dict[str, int]:
+        stats = {"scanned": 0, "indexed": 0, "skipped": 0}
+        actions: list[dict[str, Any]] = []
+
+        def flush() -> None:
+            if not actions:
+                return
+            ok, _ = target_bulk(target_client, actions)
+            stats["indexed"] += ok
+            actions.clear()
+
+        query: dict[str, Any] = {"query": {"match_all": {}}}
+        if slice_id is not None:
+            query["slice"] = {"id": slice_id, "max": slices}
+
+        for hit in scan(source_client, index=source_index, query=query, _source=True, preserve_order=False):
+            stats["scanned"] += 1
+            doc = hit["_source"]
+            sig = doc.get("signature")
+            if not isinstance(sig, list) or len(sig) != dimension:
+                stats["skipped"] += 1
+                continue
+            actions.append({"_index": target_index, "_id": hit["_id"], "_source": doc})
+            if len(actions) >= batch_size:
+                flush()
+        flush()
+        return stats
+
+    if slices <= 1:
+        return _migrate_slice(None)
+
+    from concurrent.futures import ThreadPoolExecutor
+
     stats = {"scanned": 0, "indexed": 0, "skipped": 0}
-    actions: list[dict[str, Any]] = []
-
-    def flush() -> None:
-        if not actions:
-            return
-        ok, _ = target_bulk(target_client, actions)
-        stats["indexed"] += ok
-        actions.clear()
-
-    for hit in scan(source_client, index=source_index, query={"query": {"match_all": {}}}, _source=True, preserve_order=False):
-        stats["scanned"] += 1
-        doc = hit["_source"]
-        sig = doc.get("signature")
-        if not isinstance(sig, list) or len(sig) != dimension:
-            stats["skipped"] += 1
-            continue
-        actions.append({"_index": target_index, "_id": hit["_id"], "_source": doc})
-        if len(actions) >= batch_size:
-            flush()
-    flush()
-
+    with ThreadPoolExecutor(max_workers=slices) as pool:
+        for slice_stats in pool.map(_migrate_slice, range(slices)):
+            for key in stats:
+                stats[key] += slice_stats[key]
     return stats
 
 
@@ -203,6 +234,18 @@ def main(argv: list[str] | None = None) -> int:
         default=500,
     )
     parser.add_argument(
+        "--slices",
+        type=int,
+        default=1,
+        help="parallel sliced scrolls (default 1; try matching the source shard count)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=30,
+        help="per-request timeout in seconds for both clients (default 30)",
+    )
+    parser.add_argument(
         "--delete-source",
         action="store_true",
         help="delete the source index after successful verification",
@@ -211,13 +254,13 @@ def main(argv: list[str] | None = None) -> int:
 
     # build the source client, auto-detecting the server type if requested
     if args.source_type == "auto":
-        probe = make_client(args.source_url, "opensearch")
+        probe = make_client(args.source_url, "opensearch", timeout=args.timeout)
         args.source_type = "os" if detect_server_type(probe) == "opensearch" else "es"
         probe.close()
         print(f"auto-detected source type: {args.source_type}")
 
-    source = make_client(args.source_url, "opensearch" if args.source_type == "os" else "elasticsearch")
-    target = make_client(args.target_url, "opensearch")
+    source = make_client(args.source_url, "opensearch" if args.source_type == "os" else "elasticsearch", timeout=args.timeout)
+    target = make_client(args.target_url, "opensearch", timeout=args.timeout)
 
     src_type, src_major = detect_server(source)
     dst_type, dst_major = detect_server(target)
@@ -232,6 +275,7 @@ def main(argv: list[str] | None = None) -> int:
         space_type=args.space_type,
         data_type=args.data_type,
         batch_size=args.batch_size,
+        slices=args.slices,
     )
     print(f"done: {stats}")
 

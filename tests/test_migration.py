@@ -194,3 +194,21 @@ def test_migrate_rerun_is_idempotent(os_backend, requires_download):
     finally:
         _teardown(os_backend.client, src, os_backend.exc)
         _teardown(os_backend.client, dst, os_backend.exc)
+
+
+def test_migrate_sliced(os_backend, requires_download):
+    """slices > 1 fans the scan out into parallel sliced scrolls — every doc lands exactly once."""
+    wait_until_ready(os_backend.client, "opensearch")
+
+    src = _seed_word_index(os_backend)
+    dst = random_index_name("test_mig_dst")
+
+    try:
+        stats = migrate_tool.migrate_index(os_backend.client, os_backend.client, src, dst, dimension=DIMENSION, slices=2)
+        assert stats["scanned"] == 2
+        assert stats["indexed"] == 2
+        assert stats["skipped"] == 0
+        assert migrate_tool.verify_index(os_backend.client, dst, DIMENSION)
+    finally:
+        _teardown(os_backend.client, src, os_backend.exc)
+        _teardown(os_backend.client, dst, os_backend.exc)
