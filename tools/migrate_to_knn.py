@@ -24,7 +24,9 @@ Requires image-match plus the relevant client extras
 from __future__ import annotations
 
 import argparse
+import importlib
 import sys
+import time
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -76,6 +78,41 @@ def _helpers_for(client: Any) -> tuple[Any, Any]:
     else:
         from elasticsearch.helpers import bulk, scan
     return scan, bulk
+
+
+def _bulk_error_types() -> tuple[type[Exception], ...]:
+    """Collect the retryable bulk/transport error classes of installed clients.
+
+    Doc-level bulk failures (e.g. a shard briefly unavailable during
+    relocation) and transport errors after the client's own retries are
+    transient during long migrations — the batch is re-sent as-is, which is
+    safe because every action preserves the source _id (idempotent upsert).
+    """
+    error_types: list[type[Exception]] = []
+    for mod_name, attr in (
+        ("opensearchpy.helpers", "BulkIndexError"),
+        ("opensearchpy", "TransportError"),
+        ("elasticsearch.helpers", "BulkIndexError"),
+        ("elasticsearch", "TransportError"),
+    ):
+        try:
+            error_types.append(getattr(importlib.import_module(mod_name), attr))
+        except (ImportError, AttributeError):
+            continue
+    return tuple(error_types)
+
+
+def _resilient_bulk(bulk: Any, client: Any, actions: list[dict[str, Any]], max_attempts: int = 10) -> tuple[int, Any]:
+    """helpers.bulk with exponential-backoff retry on transient failures."""
+    error_types = _bulk_error_types()
+    for attempt in range(max_attempts):
+        try:
+            return bulk(client, actions)
+        except error_types:
+            if attempt == max_attempts - 1:
+                raise
+            time.sleep(min(5 * 2**attempt, 120))
+    raise AssertionError("unreachable")
 
 
 def migrate_index(
@@ -131,7 +168,7 @@ def migrate_index(
         def flush() -> None:
             if not actions:
                 return
-            ok, _ = target_bulk(target_client, actions)
+            ok, _ = _resilient_bulk(target_bulk, target_client, actions)
             stats["indexed"] += ok
             actions.clear()
 

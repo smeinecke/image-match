@@ -347,6 +347,47 @@ def test_migrate_bulk_errors_not_counted_as_indexed(monkeypatch):
     assert stats["indexed"] == 0
 
 
+def test_migrate_bulk_retries_transient_failures(monkeypatch):
+    """Transient bulk errors (shard unavailable, transport blips) are retried —
+    a single flaky batch must not abort a multi-hour migration."""
+    from opensearchpy.helpers import BulkIndexError
+
+    mod = _migration_tool()
+    source, target = _fake_clients()
+    monkeypatch.setattr(mod.time, "sleep", lambda _: None)
+
+    hits = [{"_id": "1", "_source": {"signature": [0.0] * 4, "path": "a"}}]
+    calls = []
+
+    def flaky_bulk(client, actions):
+        calls.append(len(actions))
+        if len(calls) == 1:
+            raise BulkIndexError("1 document(s) failed to index.", [{"index": {"status": 503}}])
+        return len(actions), []
+
+    monkeypatch.setattr(mod, "_helpers_for", lambda c: (lambda *a, **k: iter(hits), flaky_bulk))
+    stats = mod.migrate_index(source, target, "src", "dst", dimension=4)
+    assert stats["indexed"] == 1
+    assert calls == [1, 1]
+
+
+def test_migrate_bulk_retries_exhausted_propagates(monkeypatch):
+    from opensearchpy.helpers import BulkIndexError
+
+    mod = _migration_tool()
+    source, target = _fake_clients()
+    monkeypatch.setattr(mod.time, "sleep", lambda _: None)
+
+    hits = [{"_id": "1", "_source": {"signature": [0.0] * 4, "path": "a"}}]
+
+    def always_failing_bulk(client, actions):
+        raise BulkIndexError("1 document(s) failed to index.", [{"index": {"status": 503}}])
+
+    monkeypatch.setattr(mod, "_helpers_for", lambda c: (lambda *a, **k: iter(hits), always_failing_bulk))
+    with pytest.raises(BulkIndexError):
+        mod.migrate_index(source, target, "src", "dst", dimension=4)
+
+
 def test_verify_index_missing_signature():
     mod = _migration_tool()
     client = MagicMock()
