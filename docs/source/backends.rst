@@ -85,7 +85,25 @@ reversible (see :doc:`migration`).
 The knn candidates are rescored client-side with the usual normalized
 distance, so ``dist``/``distance_cutoff`` semantics are unchanged. The
 difference is recall: HNSW is *approximate* — ``size`` controls the candidate
-count ``k``; raise it for better recall on large indexes.
+count ``k`` (and Lucene derives ``ef_search`` from it); raise it for better
+recall on large indexes.
+
+.. warning::
+   HNSW needs the vector graphs in page cache to be fast *and* accurate.
+   Storage footprint is roughly ``docs × dimension × 4 bytes`` (float) plus
+   graph overhead — a ~56M-document, 648-dimension index grew to ~400 GB
+   (~2.6× the equivalent word index). On HDD-backed nodes without enough RAM
+   to hold that working set we observed:
+
+   * near-zero recall at the default ``ef_search`` — even exact self-matches
+     (``dist 0.0``) were absent from the top hits;
+   * recall recovering only at ``ef_search ≈ 512–1000``, where random graph
+     reads pushed single queries past 120 s.
+
+   For large collections prefer ``data_type="byte"`` (4× smaller vectors,
+   lossless for int8 signatures), SSD storage, and RAM sized to the vector
+   working set. Without those, the word drivers are both faster and more
+   accurate — k-NN is not a free upgrade on memory-constrained hardware.
 
 Engine and data-type choices via ``knn_index_body(..., engine=..., space_type=..., data_type=...)``:
 

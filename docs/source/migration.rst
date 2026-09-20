@@ -54,13 +54,38 @@ Options:
     int8, so ``byte`` is lossless and ~4x smaller in memory
 ``--batch-size``
     bulk request size (default 500)
+``--slices``
+    parallel sliced scrolls over the source index (default 1). A reasonable
+    ceiling is the source shard count — but on HDD-backed clusters each
+    slice adds random read+write load: 8 slices saturated a two-node HDD
+    cluster badly enough to evict the cluster-manager, while 4 ran
+    unattended. Watch node io pressure rather than maximizing this.
+``--timeout``
+    per-request timeout in seconds for both clients (default 30). Raise it
+    (e.g. 180) for large shards — scroll fetches and bulk responses on a
+    busy cluster can exceed 30 s.
+``--skip-existing``
+    resume mode: ``_mget``-filter each batch so already-migrated ``_id``\ s
+    are not re-indexed. After an interrupted run this turns the re-walk of
+    the migrated range into cheap reads instead of tens of millions of
+    redundant k-NN upserts (which also trigger HNSW merges).
 ``--delete-source``
     drop the source index after verification passes
 
 Documents whose signature length doesn't match ``--dimension`` are skipped and
 reported, not fatal. If the target index already exists, documents are appended
-into it (overwriting by ``_id``). The tool prints detected source/target server
-type and version before copying.
+into it (overwriting by ``_id``). Transient bulk failures (shard
+unavailability during merges or node restarts) are retried with exponential
+backoff instead of aborting the run. The tool prints detected source/target
+server type and version before copying.
+
+.. note::
+   k-NN write amplification (Lucene merges + HNSW graph build) is the real
+   load, not the scroll. Plan capacity: the hybrid index is roughly 2.5–3×
+   the size of the source word index with ``float`` vectors. After the count
+   converges, verify recall *before* flipping the application — e.g. search
+   a few known images and confirm each returns itself at ``dist 0.0`` (see
+   the warning in :doc:`backends`).
 
 Upgrading to OpenSearch 3
 -------------------------
