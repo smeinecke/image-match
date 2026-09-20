@@ -410,6 +410,31 @@ def test_migrate_skip_existing_filters_via_mget(monkeypatch):
     assert bulked == ["1"]
 
 
+def test_migrate_skip_existing_tolerates_mget_error_entries(monkeypatch):
+    """An mget doc entry with an "error" instead of "found" (shard briefly
+    unavailable) must not crash — the doc is treated as missing and re-bulked."""
+    mod = _migration_tool()
+    source, target = _fake_clients()
+
+    hits = [{"_id": str(i), "_source": {"signature": [0.0] * 4}} for i in range(2)]
+    target.mget.return_value = {
+        "docs": [
+            {"_id": "0", "found": True},
+            {"_id": "1", "error": {"type": "unavailable_shards_exception"}},
+        ]
+    }
+    bulked = []
+
+    def fake_bulk(client, actions):
+        bulked.extend(a["_id"] for a in actions)
+        return len(actions), []
+
+    monkeypatch.setattr(mod, "_helpers_for", lambda c: (lambda *a, **k: iter(hits), fake_bulk))
+    stats = mod.migrate_index(source, target, "src", "dst", dimension=4, skip_existing=True)
+    assert stats["indexed"] == 1
+    assert bulked == ["1"]
+
+
 def test_verify_index_missing_signature():
     mod = _migration_tool()
     client = MagicMock()
@@ -624,7 +649,7 @@ def test_main_verify_failure_no_delete_source(monkeypatch):
     target.count.return_value = {"count": 0}
     target.search.return_value = {"hits": {"hits": [{"_id": "x", "_source": {}}]}}
 
-    monkeypatch.setattr(mod, "make_client", lambda url, st: source if st == "elasticsearch" else target)
+    monkeypatch.setattr(mod, "make_client", lambda url, st, **kw: source if st == "elasticsearch" else target)
     monkeypatch.setattr(mod, "_helpers_for", lambda c: (lambda *a, **k: iter([]), lambda c, a: (0, [])))
 
     rc = mod.main([
@@ -689,7 +714,7 @@ def _main_clients(mod, monkeypatch):
     target.info.return_value = {"version": {"distribution": "opensearch", "number": "2.19.0"}}
     target.indices.exists.return_value = False
 
-    monkeypatch.setattr(mod, "make_client", lambda url, st: source if st == "elasticsearch" else target)
+    monkeypatch.setattr(mod, "make_client", lambda url, st, **kw: source if st == "elasticsearch" else target)
     monkeypatch.setattr(mod, "_helpers_for", lambda c: (lambda *a, **k: iter([]), lambda c, a: (0, [])))
     migrate_calls = []
     verify_calls = []
@@ -709,7 +734,15 @@ def test_main_success_path(monkeypatch):
     args, kwargs = migrate_calls[0]
     assert args[0] is source and args[1] is target
     assert args[2:] == ("s", "d")
-    assert kwargs == {"dimension": 648, "engine": "lucene", "space_type": "l2", "data_type": "float", "batch_size": 500}
+    assert kwargs == {
+        "dimension": 648,
+        "engine": "lucene",
+        "space_type": "l2",
+        "data_type": "float",
+        "batch_size": 500,
+        "slices": 1,
+        "skip_existing": False,
+    }
     # verify_index must get (target_client, target_index, dimension)
     assert verify_calls == [((target, "d", 648), {})]
     target.indices.refresh.assert_called_once_with(index="d")
@@ -764,7 +797,7 @@ def test_main_auto_detect_source_type(monkeypatch):
     probe.__class__ = type("FakeOS", (), {"__module__": "opensearchpy.client"})
     probe.info.return_value = {"version": {"distribution": "opensearch", "number": "2.19.0"}}
     made = []
-    monkeypatch.setattr(mod, "make_client", lambda url, st: made.append((url, st)) or probe)
+    monkeypatch.setattr(mod, "make_client", lambda url, st, **kw: made.append((url, st)) or probe)
 
     argv = [a for i, a in enumerate(_BASE_ARGV) if _BASE_ARGV[i - 1] != "--source-type" and a != "--source-type"]
     rc = mod.main(argv)
@@ -783,7 +816,7 @@ def test_main_detect_es_source_via_probe(monkeypatch):
     probe.__class__ = type("FakeOS", (), {"__module__": "opensearchpy.client"})
     probe.info.return_value = {"version": {"number": "7.17.13"}}  # no distribution -> es
     made = []
-    monkeypatch.setattr(mod, "make_client", lambda url, st: made.append((url, st)) or probe)
+    monkeypatch.setattr(mod, "make_client", lambda url, st, **kw: made.append((url, st)) or probe)
 
     argv = [a for i, a in enumerate(_BASE_ARGV) if _BASE_ARGV[i - 1] != "--source-type" and a != "--source-type"]
     rc = mod.main(argv)
@@ -819,7 +852,7 @@ def test_main_explicit_source_type_auto(monkeypatch):
     probe = MagicMock()
     probe.__class__ = type("FakeOS", (), {"__module__": "opensearchpy.client"})
     probe.info.return_value = {"version": {"number": "7.17.13"}}
-    monkeypatch.setattr(mod, "make_client", lambda url, st: probe)
+    monkeypatch.setattr(mod, "make_client", lambda url, st, **kw: probe)
 
     argv = [a for i, a in enumerate(_BASE_ARGV) if not (_BASE_ARGV[i - 1] == "--source-type" or a == "--source-type")]
     rc = mod.main([*argv, "--source-type", "auto"])

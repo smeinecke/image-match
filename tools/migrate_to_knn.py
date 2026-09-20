@@ -102,17 +102,22 @@ def _bulk_error_types() -> tuple[type[Exception], ...]:
     return tuple(error_types)
 
 
-def _resilient_bulk(bulk: Any, client: Any, actions: list[dict[str, Any]], max_attempts: int = 10) -> tuple[int, Any]:
-    """helpers.bulk with exponential-backoff retry on transient failures."""
+def _resilient_call(fn: Any, *args: Any, max_attempts: int = 10, **kwargs: Any) -> Any:
+    """Retry fn(*args, **kwargs) with exponential backoff on transient failures."""
     error_types = _bulk_error_types()
     for attempt in range(max_attempts):
         try:
-            return bulk(client, actions)
+            return fn(*args, **kwargs)
         except error_types:
             if attempt == max_attempts - 1:
                 raise
             time.sleep(min(5 * 2**attempt, 120))
     raise AssertionError("unreachable")
+
+
+def _resilient_bulk(bulk: Any, client: Any, actions: list[dict[str, Any]], max_attempts: int = 10) -> tuple[int, Any]:
+    """helpers.bulk with exponential-backoff retry on transient failures."""
+    return _resilient_call(bulk, client, actions, max_attempts=max_attempts)
 
 
 def migrate_index(
@@ -175,10 +180,11 @@ def migrate_index(
                 return
             batch = actions
             if skip_existing:
+                # mget doc entries may carry an "error" instead of "found"
+                # when a shard is briefly unavailable — treat those as missing
+                # so the doc is re-bulked (idempotent upsert).
                 existing = {
-                    d["_id"]
-                    for d in target_client.mget(index=target_index, body={"ids": [a["_id"] for a in batch]})["docs"]
-                    if d["found"]
+                    d["_id"] for d in _resilient_call(target_client.mget, index=target_index, body={"ids": [a["_id"] for a in batch]})["docs"] if d.get("found")
                 }
                 stats["skipped"] += len(existing)
                 batch = [a for a in batch if a["_id"] not in existing]
