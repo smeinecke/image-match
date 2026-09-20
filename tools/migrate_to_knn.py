@@ -126,6 +126,7 @@ def migrate_index(
     data_type: str = "float",
     batch_size: int = 500,
     slices: int = 1,
+    skip_existing: bool = False,
 ) -> dict[str, int]:
     """Copy documents from a word-overlap index into a new k-NN index.
 
@@ -143,6 +144,10 @@ def migrate_index(
         slices: number of parallel sliced scrolls (default 1 — sequential).
             >1 fans the scan out across N threads; matching the source index's
             shard count is a reasonable choice. Both clients are thread-safe.
+        skip_existing: resume mode — each batch is filtered through an mget on
+            the target so already-migrated _ids are not re-indexed. Cheap reads
+            instead of expensive k-NN writes; makes restarts after a crash
+            nearly free.
 
     Returns:
         a stats dict {scanned, indexed, skipped}
@@ -168,8 +173,18 @@ def migrate_index(
         def flush() -> None:
             if not actions:
                 return
-            ok, _ = _resilient_bulk(target_bulk, target_client, actions)
-            stats["indexed"] += ok
+            batch = actions
+            if skip_existing:
+                existing = {
+                    d["_id"]
+                    for d in target_client.mget(index=target_index, body={"ids": [a["_id"] for a in batch]})["docs"]
+                    if d["found"]
+                }
+                stats["skipped"] += len(existing)
+                batch = [a for a in batch if a["_id"] not in existing]
+            if batch:
+                ok, _ = _resilient_bulk(target_bulk, target_client, batch)
+                stats["indexed"] += ok
             actions.clear()
 
         query: dict[str, Any] = {"query": {"match_all": {}}}
@@ -283,6 +298,11 @@ def main(argv: list[str] | None = None) -> int:
         help="per-request timeout in seconds for both clients (default 30)",
     )
     parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="resume mode: mget-filter each batch so already-migrated _ids are not re-indexed",
+    )
+    parser.add_argument(
         "--delete-source",
         action="store_true",
         help="delete the source index after successful verification",
@@ -313,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
         data_type=args.data_type,
         batch_size=args.batch_size,
         slices=args.slices,
+        skip_existing=args.skip_existing,
     )
     print(f"done: {stats}")
 

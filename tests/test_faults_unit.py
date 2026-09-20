@@ -388,6 +388,28 @@ def test_migrate_bulk_retries_exhausted_propagates(monkeypatch):
         mod.migrate_index(source, target, "src", "dst", dimension=4)
 
 
+def test_migrate_skip_existing_filters_via_mget(monkeypatch):
+    """Resume mode: already-indexed _ids are skipped via mget instead of
+    being re-written — only missing docs hit the bulk path."""
+    mod = _migration_tool()
+    source, target = _fake_clients()
+
+    hits = [{"_id": str(i), "_source": {"signature": [0.0] * 4, "path": f"{i}.jpg"}} for i in range(3)]
+    target.mget.return_value = {"docs": [{"_id": "0", "found": True}, {"_id": "1", "found": False}, {"_id": "2", "found": True}]}
+    bulked = []
+
+    def fake_bulk(client, actions):
+        bulked.extend(a["_id"] for a in actions)
+        return len(actions), []
+
+    monkeypatch.setattr(mod, "_helpers_for", lambda c: (lambda *a, **k: iter(hits), fake_bulk))
+    stats = mod.migrate_index(source, target, "src", "dst", dimension=4, skip_existing=True)
+    assert stats["scanned"] == 3
+    assert stats["indexed"] == 1
+    assert stats["skipped"] == 2
+    assert bulked == ["1"]
+
+
 def test_verify_index_missing_signature():
     mod = _migration_tool()
     client = MagicMock()
