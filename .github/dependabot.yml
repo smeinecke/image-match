@@ -35,3 +35,8 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    ignore:
+      # ES 8+/9+ images are incompatible with the ES 7.x index format and
+      # query DSL this project targets; the 7.x pin is intentional.
+      - dependency-name: "elasticsearch/elasticsearch"
+        update-types: ["version-update:semver-major"]
