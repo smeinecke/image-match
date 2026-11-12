@@ -10,7 +10,10 @@ updates:
     ignore:
       # elasticsearch-py 8.x is incompatible with the ES 7.x index format
       # and query DSL this project targets; the <8 pin is intentional.
+      # The [async] extra variant is tracked as a separate dependency name.
       - dependency-name: "elasticsearch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "elasticsearch[async]"
         update-types: ["version-update:semver-major"]
     groups:
       minor-and-patch:
